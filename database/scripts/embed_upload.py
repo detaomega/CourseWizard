@@ -7,20 +7,59 @@ Loads course data, creates embeddings, and uploads to Qdrant vector database
 import json
 import re
 import os
+import logging
 from typing import List, Dict, Optional
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
+# --- Logger Setup ---
+LOG_DIR = "logs"
+LOG_FILE = os.path.join(LOG_DIR, "embed_upload.log") # Updated LOG_FILE path
+
+# Create logs directory if it doesn't exist
+if not os.path.exists(LOG_DIR):
+    try:
+        os.makedirs(LOG_DIR)
+    except OSError as e:
+        # This might happen in a race condition if another process creates it.
+        # Or if there are permission issues.
+        print(f"Error creating log directory {LOG_DIR}: {e}")
+        # Fallback to current directory if log dir creation fails
+        LOG_FILE = "embed_upload.log" 
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# File handler
+file_handler = logging.FileHandler(LOG_FILE, mode='w') # Overwrite log file each run
+file_handler.setLevel(logging.INFO)
+
+# Console handler (optional, for also printing to console)
+# console_handler = logging.StreamHandler()
+# console_handler.setLevel(logging.INFO)
+
+# Formatter
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+# console_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+# logger.addHandler(console_handler)
+# --- End Logger Setup ---
+
 
 class CourseEmbedder:
     def __init__(self, qdrant_host: str = "localhost", qdrant_port: int = 6333):
         """Initialize course embedder with Qdrant client"""
+        logger.info("Initializing course embedder...")
         print("Initializing course embedder...")
         self.client = QdrantClient(host=qdrant_host, port=qdrant_port, check_compatibility=False)
         self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
         self.collection_name = "ntu_courses"
+        logger.info("Loading multilingual semantic model...")
         print("Loading multilingual semantic model...")
+        logger.info("Initialization complete.")
         print("Initialization complete.")
     
     def parse_time_slots(self, time_str: str) -> List[Dict]:
@@ -139,14 +178,20 @@ class CourseEmbedder:
     
     def create_collection(self):
         """Create or recreate the courses collection"""
-        print("\nCreating vector database collection...")
+        msg = "\nCreating vector database collection..."
+        logger.info(msg)
+        print(msg)
         
         try:
             # Delete existing collection if it exists
             self.client.delete_collection(collection_name=self.collection_name)
-            print(f"Deleted existing collection: {self.collection_name}")
+            msg = f"Deleted existing collection: {self.collection_name}"
+            logger.info(msg)
+            print(msg)
         except Exception as e:
-            print(f"Collection may not exist: {e}")
+            msg = f"Collection {self.collection_name} may not exist or could not be deleted: {e}"
+            logger.warning(msg)
+            print(f"Warning: {msg}")
         
         # Create new collection
         self.client.create_collection(
@@ -156,16 +201,23 @@ class CourseEmbedder:
                 distance=Distance.COSINE
             )
         )
-        print(f"Created collection: {self.collection_name}")
+        msg = f"Created collection: {self.collection_name}"
+        logger.info(msg)
+        print(msg)
     
     def upload_courses(self, courses: List[Dict]):
         """Upload course data to vector database"""
-        print(f"\nUploading course data...")
-        print(f"Starting upload of {len(courses)} courses...")
+        msg_uploading = "\nUploading course data..."
+        logger.info(msg_uploading)
+        print(msg_uploading)
+        
+        msg_starting = f"Starting upload of {len(courses)} courses..."
+        logger.info(msg_starting)
+        print(msg_starting)
         
         points = []
         for i, course in enumerate(courses):
-            print(f"Processing course {i+1}: {course.get('name', 'Unknown')[:30]}...")
+            logger.debug(f"Processing course {i+1}: {course.get('name', 'Unknown')[:30]}...") # Keep detailed processing to debug
             point = self.process_course(course, i)
             points.append(point)
         
@@ -178,72 +230,98 @@ class CourseEmbedder:
                 points=batch
             )
         
-        print(f"Successfully uploaded {len(courses)} courses to vector database")
+        msg_success = f"Successfully uploaded {len(courses)} courses to vector database"
+        logger.info(msg_success)
+        print(msg_success)
 
 
 def load_course_data(data_dir: str = "data/") -> List[Dict]:
-    """Load course data from all JSON files in the specified directory"""
-    print(f"Loading course data from directory: {data_dir}")
+    """Load course data from all JSON files in the specified directory and its subdirectories (recursively)"""
+    msg_loading = f"Loading course data recursively from directory: {data_dir}"
+    logger.info(msg_loading)
+    print(msg_loading)
     all_courses = []
     
     try:
         if not os.path.isdir(data_dir):
-            print(f"Error: Data directory not found at {data_dir}")
+            err_msg = f"Data directory not found at {data_dir}"
+            logger.error(err_msg)
+            print(f"ERROR: {err_msg}")
             return []
             
-        for filename in os.listdir(data_dir):
-            if filename.endswith(".json"):
-                file_path = os.path.join(data_dir, filename)
-                print(f"Processing file: {file_path}...")
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        courses_in_file = json.load(f)
-                        if isinstance(courses_in_file, list): # Expecting a list of courses
-                            all_courses.extend(courses_in_file)
-                            print(f"Successfully loaded {len(courses_in_file)} courses from {filename}")
-                        else:
-                            print(f"Warning: {filename} does not contain a list of courses. Skipping.")
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing JSON file {filename}: {e}")
-                except Exception as e:
-                    print(f"An unexpected error occurred while processing {filename}: {e}")
+        for root, _, files in os.walk(data_dir):
+            for filename in files:
+                if filename.endswith(".json"):
+                    file_path = os.path.join(root, filename)
+                    logger.info(f"Processing file: {file_path}...") # Log individual file processing
+                    # print(f"Processing file: {file_path}...") # Decided against printing for every file
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            courses_in_file = json.load(f)
+                            if isinstance(courses_in_file, list):
+                                all_courses.extend(courses_in_file)
+                                # logger.info(f"Successfully loaded {len(courses_in_file)} courses from {filename}") # User commented this out
+                            elif isinstance(courses_in_file, dict):
+                                all_courses.append(courses_in_file)
+                                # logger.info(f"Successfully loaded 1 course from {filename}") # User commented this out
+                            else:
+                                warn_msg = f"{filename} does not contain a list or a single dictionary of courses. Skipping."
+                                logger.warning(warn_msg)
+                                print(f"Warning: {warn_msg}")
+                    except json.JSONDecodeError as e:
+                        err_msg_json = f"Error parsing JSON file {filename}: {e}"
+                        logger.error(err_msg_json)
+                        print(f"ERROR: {err_msg_json}")
+                    except Exception as e:
+                        err_msg_proc = f"An unexpected error occurred while processing {filename}: {e}"
+                        logger.error(err_msg_proc)
+                        print(f"ERROR: {err_msg_proc}")
         
         if not all_courses:
-            print(f"No courses found in JSON files in {data_dir}")
+            warn_msg_none = f"No courses found in JSON files in {data_dir} or its subdirectories"
+            logger.warning(warn_msg_none)
+            print(f"Warning: {warn_msg_none}")
         else:
-            print(f"Successfully loaded a total of {len(all_courses)} courses from {data_dir}")
+            success_msg_load = f"Successfully loaded a total of {len(all_courses)} courses from {data_dir} and its subdirectories"
+            logger.info(success_msg_load)
+            print(success_msg_load)
         return all_courses
 
-    except FileNotFoundError: # Should be caught by os.path.isdir check, but as a fallback
-        print(f"Error: Data directory not found at {data_dir}")
-        return []
     except Exception as e:
-        print(f"An unexpected error occurred while accessing data directory {data_dir}: {e}")
+        err_msg_walk = f"An unexpected error occurred while recursively searching for JSON files in {data_dir}: {e}"
+        logger.error(err_msg_walk)
+        print(f"ERROR: {err_msg_walk}")
         return []
 
 
 def main():
     """Main execution function"""
-    print("Course Vector Database Upload")
-    print("=" * 40)
+    start_msg = "Course Vector Database Upload Script Started"
+    separator = "=" * 40
+    logger.info(start_msg)
+    print(start_msg)
+    logger.info(separator)
+    print(separator)
     
-    # Load course data from data/ directory
-    courses = load_course_data() # Updated call, uses default "data/"
+    courses = load_course_data() 
     if not courses:
-        print("No course data to process. Exiting.")
+        exit_msg = "No course data to process. Exiting."
+        logger.warning(exit_msg)
+        print(exit_msg)
         return
     
-    # Initialize embedder
     embedder = CourseEmbedder()
     
-    # Create collection
     embedder.create_collection()
     
-    # Upload courses
     embedder.upload_courses(courses)
     
-    print("\nUpload complete!")
-    print("Vector database is ready for use.")
+    complete_msg = "\nUpload complete!"
+    ready_msg = "Vector database is ready for use."
+    logger.info(complete_msg)
+    print(complete_msg)
+    logger.info(ready_msg)
+    print(ready_msg)
 
 
 if __name__ == "__main__":

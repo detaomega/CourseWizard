@@ -1,0 +1,40 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# IDE configuration files
+.vscode/
+.idea/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Qdrant data (if stored locally and not versioned)
+qdrant_data/
+
+# Log files
+*.log
+logs/
+
+# General cache directories
+.cache/
+
+# Environment variables file
+.env
+
+# Pytest cache
+.pytest_cache/ 

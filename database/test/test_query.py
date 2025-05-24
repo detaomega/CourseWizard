@@ -120,65 +120,6 @@ class VectorDBTester:
             print(f"FAIL - Semantic search test failed: {e}")
             return False
     
-    def test_time_parsing(self) -> bool:
-        """Test time slot parsing functionality"""
-        try:
-            test_cases = [
-                ("weekday 4, 234. ", 3),  # Thursday periods 2,3,4
-                ("weekday 2, 789. ", 3),  # Tuesday periods 7,8,9
-                ("weekday 3, 345. ", 3),  # Wednesday periods 3,4,5
-                ("", 0),                  # Empty time
-            ]
-            
-            for time_str, expected_slots in test_cases:
-                slots = self.parse_time_slots(time_str)
-                if len(slots) == expected_slots:
-                    if expected_slots > 0:
-                        print(f"PASS - Time parsing '{time_str}' → {len(slots)} slots")
-                    else:
-                        print(f"PASS - Empty time string handled correctly")
-                else:
-                    print(f"FAIL - Time parsing '{time_str}' expected {expected_slots} slots, got {len(slots)}")
-                    return False
-            
-            return True
-            
-        except Exception as e:
-            print(f"FAIL - Time parsing test failed: {e}")
-            return False
-    
-    def parse_time_slots(self, time_str: str) -> List[Dict[str, Any]]:
-        """Parse time string into structured time slots"""
-        if not time_str or time_str.strip() == "":
-            return []
-        
-        time_slots = []
-        
-        # Handle patterns like "weekday 4, 234. " or "weekday 2, 789. "
-        weekday_pattern = r'weekday (\d+), ([0-9X]+)\.?'
-        matches = re.findall(weekday_pattern, time_str)
-        
-        for day, periods in matches:
-            # Convert day number to Chinese weekday
-            day_map = {
-                '1': '星期一', '2': '星期二', '3': '星期三', 
-                '4': '星期四', '5': '星期五', '6': '星期六', '0': '星期日'
-            }
-            
-            weekday = day_map.get(day, f'星期{day}')
-            
-            # Parse periods (like "234" means periods 2,3,4)
-            for char in periods:
-                if char.isdigit():
-                    period_num = int(char)
-                    time_slots.append({
-                        "weekday": weekday,
-                        "period": period_num,
-                        "time": f"{weekday}第{period_num}節"
-                    })
-        
-        return time_slots
-    
     def test_metadata_filtering(self) -> bool:
         """Test metadata filtering functionality"""
         try:
@@ -226,14 +167,15 @@ class VectorDBTester:
             return False
     
     def run_all_tests(self) -> bool:
-        """Run all tests"""
+        """Run all tests and report summary"""
+        self.lazy_init()
+        
         tests = [
-            ("Database Connection", self.test_connection),
-            ("Collection Check", self.test_collection_exists),
-            ("Data Count", self.test_data_count),
-            ("Semantic Search", self.test_semantic_search),
-            ("Time Parsing", self.test_time_parsing),
-            ("Metadata Filtering", self.test_metadata_filtering),
+            self.test_connection,
+            self.test_collection_exists,
+            self.test_data_count,
+            self.test_semantic_search,
+            self.test_metadata_filtering
         ]
         
         results = []
@@ -260,6 +202,36 @@ class VectorDBTester:
         else:
             print(f"{total - passed} test(s) failed. Please check the issues above.")
             return False
+
+    def display_results(self, results: List[Any], query: str):
+        """Display search results in a readable format"""
+        print(f"\n--- Search Results for: '{query}' ---")
+        if not results:
+            print("No courses found.")
+            return
+        
+        for i, hit in enumerate(results):
+            payload = hit.payload
+            print(f"\nResult {i+1}:")
+            print(f"  Name: {payload.get('name')}")
+            print(f"  ID: {payload.get('id')}")
+            print(f"  Identifier: {payload.get('identifier')}")
+            print(f"  Code: {payload.get('code')}")
+            print(f"  Teacher: {payload.get('teacher_name')}")
+            print(f"  Department: {payload.get('host_department')}")
+            print(f"  Credits: {payload.get('credits')}")
+            
+            # Display new time_slots structure
+            time_slots = payload.get('time_slots', [])
+            if time_slots:
+                print("  Time Slots:")
+                for slot in time_slots:
+                    print(f"    - {slot}")
+            else:
+                print("  Time Slots: Not available")
+
+            print(f"  Notes: {payload.get('notes', 'N/A')}")
+            print(f"  Score: {hit.score:.4f}" if hasattr(hit, 'score') and hit.score is not None else "Score: N/A")
 
 
 def main():

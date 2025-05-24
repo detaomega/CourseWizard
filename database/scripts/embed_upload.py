@@ -184,7 +184,7 @@ class CourseEmbedder:
             # Extracting first classroom as a simple representation, can be enhanced
             "classroom": self._get_nested_value(course, ['schedules', 0, 'classroom', 'name'], 'N/A') if course.get('schedules') else 'N/A',
             
-            "targets": [target.get('department', {}).get('name') for target in course.get('courseTargets', [])], # Extracting department names
+            "targets": [target.get('department').get('name') if isinstance(target.get('department'), dict) else None for target in course.get('courseTargets', [])], # Extracting department names with type-check
             
             "course_overview": self._get_nested_value(course, ['info', '課程概述'], ''),
             "course_objective": self._get_nested_value(course, ['info', '課程目標'], ''),

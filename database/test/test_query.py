@@ -31,8 +31,16 @@ class VectorDBTester:
             self.client = QdrantClient(host=self.qdrant_host, port=self.qdrant_port, check_compatibility=False)
         
         if self.model is None:
-            print("Loading embedding model...")
-            self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            model_name = "BAAI/bge-m3"
+            print(f"Attempting to load embedding model: {model_name} (this may take a moment)...")
+            try:
+                self.model = SentenceTransformer(model_name)
+                print(f"Successfully loaded embedding model: {model_name}.")
+            except Exception as e:
+                print(f"ERROR: Failed to load SentenceTransformer model '{model_name}'. Error: {e}")
+                # This script might not function correctly without the model.
+                # Consider exiting or re-raising if model is critical for all tests.
+                sys.exit(f"Critical error: Model {model_name} could not be loaded.")
     
     def test_connection(self) -> bool:
         """Test Qdrant connection"""
@@ -80,14 +88,14 @@ class VectorDBTester:
     def test_semantic_search(self) -> bool:
         """Test semantic search functionality"""
         try:
-            test_queries = [
+        test_queries = [
                 "機器學習",
                 "計算機圖形",
                 "資訊安全",
                 "人工智慧"
-            ]
-            
-            for query in test_queries:
+        ]
+        
+        for query in test_queries:
                 query_vector = self.model.encode(query).tolist()
                 
                 try:
@@ -100,10 +108,10 @@ class VectorDBTester:
                 except Exception:
                     # Fallback to search (older method)
                     results = self.client.search(
-                        collection_name=self.collection_name,
-                        query_vector=query_vector,
-                        limit=3
-                    )
+                            collection_name=self.collection_name,
+                            query_vector=query_vector,
+                            limit=3
+                        )
                 
                 if results:
                     top_result = results[0]
@@ -114,8 +122,8 @@ class VectorDBTester:
                     print(f"FAIL - No results for query '{query}'")
                     return False
             
-            return True
-            
+                    return True
+                
         except Exception as e:
             print(f"FAIL - Semantic search test failed: {e}")
             return False
@@ -144,16 +152,16 @@ class VectorDBTester:
             except Exception:
                 # Fallback to search (older method)
                 results = self.client.search(
-                    collection_name=self.collection_name,
+                collection_name=self.collection_name,
                     query_vector=query_vector,
                     query_filter=models.Filter(
-                        must=[models.FieldCondition(
-                            key="semester",
-                            match=models.MatchValue(value="113-2")
-                        )]
-                    ),
+                    must=[models.FieldCondition(
+                        key="semester",
+                        match=models.MatchValue(value="113-2")
+                    )]
+                ),
                     limit=3
-                )
+            )
             
             if results:
                 print(f"PASS - Metadata filtering found {len(results)} courses")

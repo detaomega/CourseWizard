@@ -39,11 +39,12 @@ class InteractiveQuery:
         
         if self.model is None:
             try:
-                print("Loading embedding model (this may take a moment)...")
-                self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-                print("Embedding model loaded.")
+                model_name = "BAAI/bge-m3"
+                print(f"Attempting to load embedding model: {model_name} (this may take a moment)...")
+                self.model = SentenceTransformer(model_name)
+                print(f"Successfully loaded embedding model: {model_name}.")
             except Exception as e:
-                print(f"Error: Could not load sentence-transformer model.")
+                print(f"Error: Could not load sentence-transformer model '{model_name}'.")
                 print(f"Details: {e}")
                 sys.exit(1)
 

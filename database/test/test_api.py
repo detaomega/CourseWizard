@@ -238,7 +238,7 @@ class APITester:
                         if not (isinstance(first_slot_rec.get('weekday'), int) and \
                                 isinstance(first_slot_rec.get('period'), str)):
                             print(f"  WARN - Recommendations: Time_slots structure in recommended course incorrect.")
-
+                    
                     return True
                 else:
                     print("FAIL - Recommendations: No recommendations found in schedule")

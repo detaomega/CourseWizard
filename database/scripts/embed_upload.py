@@ -55,10 +55,21 @@ class CourseEmbedder:
         logger.info("Initializing course embedder...")
         print("Initializing course embedder...")
         self.client = QdrantClient(host=qdrant_host, port=qdrant_port, check_compatibility=False)
-        self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        self.model_name = "BAAI/bge-m3"
+        self.embedding_dim = 1024
+        logger.info(f"Attempting to load multilingual semantic model: {self.model_name}...")
+        print(f"Attempting to load multilingual semantic model: {self.model_name}...")
+        try:
+            self.model = SentenceTransformer(self.model_name)
+            test_emb = self.model.encode("test")
+            self.embedding_dim = len(test_emb)
+            logger.info(f"Successfully loaded model {self.model_name}. Embedding dimension: {self.embedding_dim}")
+            print(f"Successfully loaded model {self.model_name}. Embedding dimension: {self.embedding_dim}")
+        except Exception as e:
+            logger.error(f"Failed to load SentenceTransformer model '{self.model_name}'. Error: {e}")
+            print(f"ERROR: Failed to load SentenceTransformer model '{self.model_name}'. Ensure it is installed or accessible. Error: {e}")
+            raise
         self.collection_name = "ntu_courses"
-        logger.info("Loading multilingual semantic model...")
-        print("Loading multilingual semantic model...")
         logger.info("Initialization complete.")
         print("Initialization complete.")
     
@@ -117,12 +128,12 @@ class CourseEmbedder:
         course_objective = self._get_nested_value(course, ['info', '課程目標'])
         if course_objective:
             texts.append(str(course_objective))
-            
+        
         # Teacher name
         teacher_name = self._get_nested_value(course, ['teacher', 'name'])
         if teacher_name:
             texts.append(f"授課教師: {teacher_name}")
-
+        
         # Host Department
         host_department = course.get('hostDepartment')
         if host_department:
@@ -210,11 +221,11 @@ class CourseEmbedder:
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(
-                size=384,  # paraphrase-multilingual-MiniLM-L12-v2 embedding size
+                size=self.embedding_dim,  # Use dynamic embedding_dim from loaded model
                 distance=Distance.COSINE
             )
         )
-        msg = f"Created collection: {self.collection_name}"
+        msg = f"Created collection: {self.collection_name} with vector size {self.embedding_dim}"
         logger.info(msg)
         print(msg)
     
@@ -307,7 +318,7 @@ def load_course_data(data_dir: str = "data/") -> List[Dict]:
                     err_msg_json = f"Error parsing JSON file {filename}: {e}"
                     logger.error(err_msg_json)
                     print(f"ERROR: {err_msg_json}")
-                except Exception as e:
+                except Exception as e: # This except handles errors during file processing (not JSON parsing)
                     err_msg_proc = f"An unexpected error occurred while processing {filename}: {e}"
                     logger.error(err_msg_proc)
                     print(f"ERROR: {err_msg_proc}")

@@ -1,156 +1,117 @@
 # Database Service
 
-A semantic search and course recommendation system built with Qdrant vector database and sentence transformers.
+Semantic search and course recommendation system using Qdrant and sentence transformers.
 
 ## Overview
 
-This module provides vector database services for course data management, featuring semantic search capabilities and intelligent scheduling algorithms. It serves as the backend database layer for course recommendation systems.
-
-**Important:** Place your course data, in JSON format (see "Data Format" below), inside the `database/data/` directory. The system will automatically process all `.json` files found in this location during the data embedding and upload process.
+Provides vector database services for course data: semantic search and intelligent scheduling. Assumes course data (JSON) is in `database/data/`.
 
 ## Prerequisites
 
-- Docker and Docker Compose
+- Docker
 - Python 3.8+
-- 2GB+ RAM for vector operations
 
 ## Quick Start
 
-1. **Start the vector database**
-   ```bash
-   docker compose up -d
-   ```
+1.  **Start Qdrant:**
+    ```bash
+    # Ensure Docker is running
+    docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
+    ```
+    (Or use `docker compose up -d` if you have a `docker-compose.yml` for Qdrant in the `database` directory or project root.)
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+2.  **Install Dependencies:**
+    (From project root, where `requirements.txt` is)
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-3. **Initialize database with sample data**
-   ```bash
-   python scripts/embed_upload.py
-   ```
-   Verify the functionality by running the test suite:
-   ```bash
-   python test/test_query.py
-   ```
+3.  **Initialize Database:**
+    (From `database` directory)
+    ```bash
+    python scripts/embed_upload.py
+    ```
+    This processes JSONs in `database/data/` using `BAAI/bge-m3` model.
 
-4. **Start the API service**
-   ```bash
-   python api/api.py
-   ```
+4.  **Start API Service:**
+    (From `database` directory)
+    ```bash
+    python api/api.py
+    ```
+    Or for development (hot-reloading):
+    ```bash
+    uvicorn api.api:app --host 0.0.0.0 --port 8000 --reload
+    ```
 
 ## Services
 
-- **Qdrant Vector DB**: `http://localhost:6333` (API), `http://localhost:6334` (Dashboard)
-- **Course API**: `http://localhost:8000` (FastAPI service)
+- **Qdrant API:** `http://localhost:6333`
+- **Qdrant Dashboard:** `http://localhost:6334`
+- **Course API Docs:** `http://localhost:8000/docs` (when API service is running)
 
-## API Endpoints
+## Key API Endpoints
 
-- `GET /search` - Semantic course search
-- `GET /course/{code}` - Get specific course details by code
-- `POST /schedule` - Generate conflict-free schedules
-- `POST /recommend` - AI-powered course recommendations
+(See `http://localhost:8000/docs` for full details)
+- `GET /search`: Semantic course search.
+- `GET /course/{course_code}`: Get specific course details.
+- `POST /schedule`: Generate conflict-free schedule.
+- `POST /recommend`: AI-powered course recommendations.
+- `GET /health`: Health check.
 
 ## Data Format
 
-The system expects course data in JSON format. Each JSON file placed in the `database/data/` directory should contain a list of course objects. The `embed_upload.py` script will automatically discover and process all `.json` files within this directory.
-
-Each course object should have the following structure:
-
-```json
-{
-  "name": "計算機圖形",
-  "course_number": "CSIE5085",
-  "code": "922 U3090",
-  "semester": "113-2",
-  "targets": [
-    "資訊工程學系",
-    "智慧醫療學分學程",
-    "資訊網路與多媒體研究所",
-    "資訊工程學研究所"
-  ],
-  "teacger": "歐陽明",
-  "department": "資訊工程學研究所",
-  "credit": 3,
-  "time": "weekday 4, 234. ",
-  "classroom": "資104",
-  "comment": "智慧醫療學分學程所屬電資學院影像領域課程",
-  "course_overview": "Computer graphics course overview...",
-  "course_objective": "Course learning objectives..."
-}
-```
+- Course data as JSON files in `database/data/` (and subdirectories).
+- Each file: a list of course objects or a single course object.
+- **Crucial field**: `"id": "unique_course_uuid"` for each course.
+- `scripts/embed_upload.py` handles processing.
 
 ## Architecture
 
-- **Vector Storage**: Qdrant (384-dim embeddings)
-- **Embedding Model**: `paraphrase-multilingual-MiniLM-L12-v2`
-- **API Framework**: FastAPI
-- **Search Type**: Cosine similarity with hybrid filtering
+- **Vector DB:** Qdrant
+- **Embedding Model:** `BAAI/bge-m3` (1024-dim)
+- **API:** FastAPI
 
 ## Database Management
 
-**Reset database (clear all data):**
-```bash
-python scripts/reset_db.py
-```
+(Run from `database` directory)
 
-**Reset specific collection:**
-```bash
-python scripts/reset_db.py --collection NAME
-```
-
-**Reset all collections:**
-```bash
-python scripts/reset_db.py --all
-```
-
-**Re-initialize with fresh data:**
-```bash
-python scripts/reset_db.py && python scripts/embed_upload.py
-```
+- **Reset `ntu_courses` collection:**
+  ```bash
+  python scripts/reset_db.py
+  ```
+- **Reset and Re-upload:**
+  ```bash
+  python scripts/reset_db.py && python scripts/embed_upload.py
+  ```
 
 ## Testing
 
-Run the query test suite to verify functionality:
+(Run from `database` directory)
 
-```bash
-python test/test_query.py
-```
-
-Run the API test suite to verify endpoints:
-
-```bash
-python test/test_api.py
-```
-
-Run the interactive query script:
-
-```bash
-python test/test_query_interact.py
-```
+- **Core DB tests:** `python test/test_query.py`
+- **API tests:** `python test/test_api.py`
+- **Interactive query:** `python test/test_query_interact.py`
 
 ## Project Structure
 
 ```
 database/
-├── api/                         # API service
-│   └── api.py                   # FastAPI application
-├── data/                        # Course data
-│   └── *.json                   # Course data files (e.g., course.json, ntu_courses.json)
-├── scripts/                     # Utility scripts
-│   ├── embed_upload.py          # Vector embedding and upload
-│   └── reset_db.py              # Database reset tool
-└── test/                        # Testing suite
-    ├── test_query.py            # Query functionality tests
-    ├── test_api.py              # API endpoint tests
-    └── test_query_interact.py   # Interactive query script
+├── api/api.py             # FastAPI app
+├── data/                  # Course JSON data
+├── logs/                  # Log files
+├── scripts/               # Utility scripts (embed_upload.py, reset_db.py)
+└── test/                  # Test scripts
+
+# Project root files
+requirements.txt           # Dependencies
+README.md                  # This file (if this is a submodule)
 ```
 
 ## Configuration
 
-Modify `docker-compose.yml` to adjust Qdrant settings or `requirements.txt` for different model versions.
+- Model (`BAAI/bge-m3`) & Qdrant settings: in `scripts/embed_upload.py`, `api/api.py`.
+- Data path: `database/data/` (used by `scripts/embed_upload.py`).
 
 ## Integration
 
-This service exposes RESTful APIs for integration with frontend applications and crawling services. See API documentation at `http://localhost:8000/docs` when running. 
+This service exposes RESTful APIs for integration with frontend applications or other services (e.g., course crawlers feeding data into the `database/data/` directory). The API documentation is available at `http://localhost:8000/docs` when the API service is running. 

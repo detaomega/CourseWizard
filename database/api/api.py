@@ -72,8 +72,17 @@ class CourseSearchAPI:
             self.client = QdrantClient(host=self.qdrant_host, port=self.qdrant_port, check_compatibility=False)
         
         if self.model is None:
-            print("Loading embedding model...")
-            self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+            model_name = "BAAI/bge-m3"
+            print(f"Attempting to load embedding model: {model_name}...")
+            try:
+                self.model = SentenceTransformer(model_name)
+                print(f"Successfully loaded embedding model: {model_name}.")
+            except Exception as e:
+                print(f"ERROR: Failed to load SentenceTransformer model '{model_name}'. Error: {e}")
+                # Depending on API behavior, you might want to raise an error here
+                # or let subsequent calls fail if the model is essential.
+                # For now, it will print the error and proceed, potentially failing later.
+                pass # Or raise HTTPException(status_code=500, detail=f"Model loading failed: {e}")
     
     def has_time_conflict(self, course1_slots: List[Dict], course2_slots: List[Dict]) -> bool:
         """Check if two courses have time conflicts based on new time_slots structure."""

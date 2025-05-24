@@ -58,7 +58,19 @@ class APITester:
                         best_match = results[0]
                         score = best_match.get('score', 0)
                         name = best_match.get('name', 'Unknown')
-                        print(f"  PASS - Query: '{query}' -> '{name}' (Score: {score:.3f})")
+                        # Verify new time_slots structure (example check on the first slot of the first result)
+                        time_slots = best_match.get('time_slots', [])
+                        if time_slots:
+                            first_slot = time_slots[0]
+                            if not (isinstance(first_slot.get('weekday'), int) and \
+                                    isinstance(first_slot.get('period'), str) and \
+                                    isinstance(first_slot.get('classroom'), str)):
+                                print(f"  WARN - Query: '{query}' -> Time_slots structure incorrect: {first_slot}")
+                                # all_passed = False # Decide if this is a hard fail
+                        elif best_match.get('id'): # if id exists, time_slots should ideally exist, even if empty
+                            print(f"  WARN - Query: '{query}' -> '{name}' has no time_slots array.")
+
+                        print(f"  PASS - Query: '{query}' -> '{name}' (ID: {best_match.get('id')}, Score: {score:.3f})")
                     else:
                         print(f"  FAIL - Query: '{query}' -> No results")
                         all_passed = False
@@ -97,7 +109,24 @@ class APITester:
                     if detail_response.status_code == 200:
                         course_data = detail_response.json()
                         course_name = course_data.get('name', 'Unknown')
-                        print(f"PASS - Course Detail: Retrieved '{course_name}' (Code: {course_code})")
+                        course_id = course_data.get('id', 'N/A')
+                        # Basic check for new fields
+                        if not (course_data.get('identifier') and course_data.get('teacher_name') and course_data.get('host_department') and course_data.get('credits') is not None):
+                            print(f"FAIL - Course Detail: Missing some new fields for {course_name} (ID: {course_id})")
+                            return False
+                        # Check time_slots structure
+                        time_slots = course_data.get('time_slots', [])
+                        if time_slots:
+                            first_slot = time_slots[0]
+                            if not (isinstance(first_slot.get('weekday'), int) and \
+                                    isinstance(first_slot.get('period'), str) and \
+                                    isinstance(first_slot.get('classroom'), str)):
+                                print(f"FAIL - Course Detail: Time_slots structure incorrect for {course_name} (ID: {course_id}): {first_slot}")
+                                return False
+                        elif course_id != 'N/A': # if id exists, time_slots should ideally exist, even if empty
+                             print(f"WARN - Course Detail: '{course_name}' (ID: {course_id}) has no time_slots array.")
+
+                        print(f"PASS - Course Detail: Retrieved '{course_name}' (ID: {course_id}, Code: {course_code})")
                         return True
                     else:
                         print(f"FAIL - Course Detail: Status {detail_response.status_code}, Response: {detail_response.text}")
@@ -151,6 +180,16 @@ class APITester:
                 # Show sample courses in schedule
                 if courses:
                     print(f"  Sample courses: {[c.get('name', 'Unknown')[:30] for c in courses[:3]]}")
+                    # Check structure of a sample course in schedule
+                    sample_course_in_schedule = courses[0]
+                    if not (sample_course_in_schedule.get('identifier') and sample_course_in_schedule.get('teacher_name')):
+                        print(f"  WARN - Schedule Generation: Sample course in schedule might be missing new fields.")
+                    time_slots_in_schedule = sample_course_in_schedule.get('time_slots', [])
+                    if time_slots_in_schedule:
+                        first_slot_schedule = time_slots_in_schedule[0]
+                        if not (isinstance(first_slot_schedule.get('weekday'), int) and \
+                                isinstance(first_slot_schedule.get('period'), str)):
+                            print(f"  WARN - Schedule Generation: Time_slots structure in scheduled course incorrect.")
                 
                 return True
             else:
@@ -185,8 +224,20 @@ class APITester:
                     # Show top recommendations
                     for i, rec in enumerate(recommended_schedule[:3], 1):
                         name = rec.get('name', 'Unknown')
-                        credits = rec.get('credit', 0)
-                        print(f"  {i}. {name} (Credits: {credits})")
+                        credits = rec.get('credits', 0) # Changed from credit
+                        course_id = rec.get('id', 'N/A')
+                        print(f"  {i}. {name} (ID: {course_id}, Credits: {credits})")
+                    
+                    # Check structure of a sample recommended course
+                    sample_rec_course = recommended_schedule[0]
+                    if not (sample_rec_course.get('identifier') and sample_rec_course.get('teacher_name')):
+                        print(f"  WARN - Recommendations: Sample recommended course might be missing new fields.")
+                    time_slots_rec = sample_rec_course.get('time_slots', [])
+                    if time_slots_rec:
+                        first_slot_rec = time_slots_rec[0]
+                        if not (isinstance(first_slot_rec.get('weekday'), int) and \
+                                isinstance(first_slot_rec.get('period'), str)):
+                            print(f"  WARN - Recommendations: Time_slots structure in recommended course incorrect.")
                     
                     return True
                 else:

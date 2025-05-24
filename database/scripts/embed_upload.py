@@ -8,7 +8,7 @@ import json
 import re
 import os
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
@@ -55,123 +55,147 @@ class CourseEmbedder:
         logger.info("Initializing course embedder...")
         print("Initializing course embedder...")
         self.client = QdrantClient(host=qdrant_host, port=qdrant_port, check_compatibility=False)
-        self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
+        self.model_name = "BAAI/bge-m3"
+        self.embedding_dim = 1024
+        logger.info(f"Attempting to load multilingual semantic model: {self.model_name}...")
+        print(f"Attempting to load multilingual semantic model: {self.model_name}...")
+        try:
+            self.model = SentenceTransformer(self.model_name)
+            test_emb = self.model.encode("test")
+            self.embedding_dim = len(test_emb)
+            logger.info(f"Successfully loaded model {self.model_name}. Embedding dimension: {self.embedding_dim}")
+            print(f"Successfully loaded model {self.model_name}. Embedding dimension: {self.embedding_dim}")
+        except Exception as e:
+            logger.error(f"Failed to load SentenceTransformer model '{self.model_name}'. Error: {e}")
+            print(f"ERROR: Failed to load SentenceTransformer model '{self.model_name}'. Ensure it is installed or accessible. Error: {e}")
+            raise
         self.collection_name = "ntu_courses"
-        logger.info("Loading multilingual semantic model...")
-        print("Loading multilingual semantic model...")
         logger.info("Initialization complete.")
         print("Initialization complete.")
     
-    def parse_time_slots(self, time_str: str) -> List[Dict]:
-        """Parse time string into structured time slots"""
-        if not time_str or time_str.strip() == "":
+    def parse_time_slots(self, schedules: List[Dict]) -> List[Dict]:
+        """Parse schedule objects into structured time slots, keeping original values."""
+        if not schedules:
             return []
         
-        time_slots = []
+        parsed_slots = []
         
-        # Handle patterns like "weekday 4, 234. " or "weekday 2, 789. "
-        weekday_pattern = r'weekday (\d+), ([0-9X]+)\.?'
-        matches = re.findall(weekday_pattern, time_str)
-        
-        for day, periods in matches:
-            # Convert day number to Chinese weekday
-            day_map = {
-                '1': '星期一', '2': '星期二', '3': '星期三', 
-                '4': '星期四', '5': '星期五', '6': '星期六', '0': '星期日'
-            }
+        for schedule_item in schedules:
+            weekday = schedule_item.get('weekday') # Keep as integer
+            intervals = schedule_item.get('intervals', []) # Keep as list of strings/numbers
             
-            weekday = day_map.get(day, f'星期{day}')
+            # Safely get classroom_info, defaulting to an empty dict if 'classroom' is None or missing
+            classroom_info = schedule_item.get('classroom') 
+            if classroom_info is None:
+                classroom_info = {}
+            classroom_name = classroom_info.get('name', 'N/A')
             
-            # Parse periods (like "234" means periods 2,3,4)
-            for char in periods:
-                if char.isdigit():
-                    period_num = int(char)
-                    time_slots.append({
-                        "weekday": weekday,
-                        "period": period_num,
-                        "time": f"{weekday}第{period_num}節"
-                    })
-        
-        return time_slots
+            if weekday is None: # Skip if weekday is not defined
+                logger.debug(f"Skipping schedule_item due to missing weekday: {schedule_item}")
+                continue
+                
+            for period in intervals:
+                parsed_slots.append({
+                    "weekday": weekday,       # Store original integer weekday
+                    "period": str(period),    # Store original period string/number
+                    "classroom": classroom_name
+                })
+        return parsed_slots
     
+    def _get_nested_value(self, data: Dict, path: List[str], default: Any = None) -> Any:
+        """Safely get a value from a nested dictionary."""
+        current = data
+        for key in path:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                return default
+        return current
+
     def create_embedding_text(self, course: Dict) -> str:
-        """Create text for embedding from course data"""
+        """Create text for embedding from new course data structure"""
         texts = []
         
         # Course name (most important)
         if course.get('name'):
             texts.append(course['name'])
         
-        # Course overview and objectives
-        if course.get('course_overview'):
-            texts.append(course['course_overview'])
+        # Course overview and objectives from info sub-dictionary
+        course_overview = self._get_nested_value(course, ['info', '課程概述'])
+        if course_overview:
+            texts.append(str(course_overview))
         
-        if course.get('course_objective'):
-            texts.append(course['course_objective'])
+        course_objective = self._get_nested_value(course, ['info', '課程目標'])
+        if course_objective:
+            texts.append(str(course_objective))
         
         # Teacher name
-        if course.get('teacger'):  # Note: keeping original field name
-            texts.append(f"授課教師: {course['teacger']}")
+        teacher_name = self._get_nested_value(course, ['teacher', 'name'])
+        if teacher_name:
+            texts.append(f"授課教師: {teacher_name}")
         
-        # Department
-        if course.get('department'):
-            texts.append(f"開課單位: {course['department']}")
-        
-        # Course number for technical courses
-        if course.get('course_number'):
-            texts.append(f"課號: {course['course_number']}")
-        
-        # Comments (often contain important info)
-        if course.get('comment'):
-            texts.append(course['comment'])
-        
-        return " ".join(texts)
+        # Host Department
+        host_department = course.get('hostDepartment')
+        if host_department:
+            texts.append(f"開課單位: {host_department}")
+
+        return " ".join(filter(None, texts))
     
-    def process_course(self, course: Dict, index: int) -> PointStruct:
-        """Process a single course into vector database format"""
+    def process_course(self, course: Dict) -> Optional[PointStruct]:
+        """Process a single course into vector database format using new structure"""
         
+        course_id = course.get('id')
+        if not course_id:
+            logger.warning(f"Course missing 'id', skipping: {course.get('name', 'Unknown Name')}")
+            print(f"Warning: Course missing 'id', skipping: {course.get('name', 'Unknown Name')}")
+            return None
+
         # Create embedding text
         embedding_text = self.create_embedding_text(course)
         
         # Generate embedding
         embedding = self.model.encode(embedding_text).tolist()
         
-        # Parse time slots
-        time_slots = self.parse_time_slots(course.get('time', ''))
+        # Parse time slots from schedules array
+        time_slots = self.parse_time_slots(course.get('schedules', []))
         
-        # Create payload with new structure
+        # Store the entire original JSON as a string
+        try:
+            original_json_string = json.dumps(course, ensure_ascii=False)
+        except TypeError as e:
+            logger.error(f"Could not serialize course to JSON for id {course_id}: {e}")
+            original_json_string = "Error serializing original JSON"
+
+        # Extract specific fields for payload, adapting to new structure
         payload = {
-            # Basic info
+            "id": course_id,
             "name": course.get('name', ''),
-            "course_number": course.get('course_number', ''),
+            "serial": course.get('serial', ''), # Added serial
+            "identifier": course.get('identifier', ''), # Replaces course_number
             "code": course.get('code', ''),
             "semester": course.get('semester', ''),
-            "department": course.get('department', ''),
-            "teacher": course.get('teacger', ''),  # Note: original field name
-            "credit": course.get('credit', 0),
+            "host_department": course.get('hostDepartment', ''), # Renamed from department
+            "teacher_name": self._get_nested_value(course, ['teacher', 'name'], ''),
+            "teacher_id": self._get_nested_value(course, ['teacher', 'id'], ''),
+            "credits": course.get('credits', 0),
             
-            # Time and location
-            "time_raw": course.get('time', ''),
-            "time_slots": time_slots,
-            "classroom": course.get('classroom'),
+            "notes": course.get('notes', ''),
+            "time_slots": time_slots, # Parsed from schedules
+            # Extracting first classroom as a simple representation, can be enhanced
+            "classroom": self._get_nested_value(course, ['schedules', 0, 'classroom', 'name'], 'N/A') if course.get('schedules') else 'N/A',
             
-            # Target audience
-            "targets": course.get('targets', []),
+            "targets": [target.get('department').get('name') if isinstance(target.get('department'), dict) else None for target in course.get('courseTargets', [])], # Extracting department names with type-check
             
-            # Course content
-            "course_overview": course.get('course_overview'),
-            "course_objective": course.get('course_objective'),
-            "comment": course.get('comment'),
+            "course_overview": self._get_nested_value(course, ['info', '課程概述'], ''),
+            "course_objective": self._get_nested_value(course, ['info', '課程目標'], ''),
             
-            # Embedding text for debugging
-            "embedding_text": embedding_text,
-            
-            # Searchable fields
-            "full_text": embedding_text
+            "embedding_text": embedding_text, # For debugging
+            "original_json_string": original_json_string # Store full original JSON
+            # "full_text" was removed as embedding_text serves a similar purpose for search debugging
         }
         
         return PointStruct(
-            id=index,
+            id=course_id, # Use UUID from course data
             vector=embedding,
             payload=payload
         )
@@ -197,11 +221,11 @@ class CourseEmbedder:
         self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=VectorParams(
-                size=384,  # paraphrase-multilingual-MiniLM-L12-v2 embedding size
+                size=self.embedding_dim,  # Use dynamic embedding_dim from loaded model
                 distance=Distance.COSINE
             )
         )
-        msg = f"Created collection: {self.collection_name}"
+        msg = f"Created collection: {self.collection_name} with vector size {self.embedding_dim}"
         logger.info(msg)
         print(msg)
     
@@ -211,26 +235,52 @@ class CourseEmbedder:
         logger.info(msg_uploading)
         print(msg_uploading)
         
-        msg_starting = f"Starting upload of {len(courses)} courses..."
+        num_total_courses = len(courses)
+        msg_starting = f"Starting upload of {num_total_courses} courses..."
         logger.info(msg_starting)
         print(msg_starting)
         
         points = []
-        for i, course in enumerate(courses):
-            logger.debug(f"Processing course {i+1}: {course.get('name', 'Unknown')[:30]}...") # Keep detailed processing to debug
-            point = self.process_course(course, i)
-            points.append(point)
+        processed_count = 0
+        skipped_count = 0
         
+        for i, course_data in enumerate(courses):
+            logger.debug(f"Processing course {i+1}/{num_total_courses}: {self._get_nested_value(course_data, ['name'], 'Unknown Name')[:50]}...")
+            point = self.process_course(course_data) # Pass the whole course dict
+            if point:
+                points.append(point)
+                processed_count += 1
+            else:
+                skipped_count +=1
+        
+        if skipped_count > 0:
+            msg_skipped = f"Skipped {skipped_count} courses due to missing 'id' or other processing issues."
+            logger.warning(msg_skipped)
+            print(f"Warning: {msg_skipped}")
+
+        if not points:
+            msg_no_points = "No valid course data points to upload after processing."
+            logger.warning(msg_no_points)
+            print(f"Warning: {msg_no_points}")
+            return
+
         # Upload in batches
         batch_size = 100
+        actual_uploaded_count = 0
         for i in range(0, len(points), batch_size):
             batch = points[i:i+batch_size]
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=batch
-            )
-        
-        msg_success = f"Successfully uploaded {len(courses)} courses to vector database"
+            try:
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=batch
+                )
+                actual_uploaded_count += len(batch)
+                logger.info(f"Uploaded batch {i//batch_size + 1}/{(len(points) + batch_size - 1)//batch_size}, {len(batch)} points.")
+            except Exception as e:
+                logger.error(f"Error uploading batch {i//batch_size + 1}: {e}")
+                print(f"ERROR: Error uploading batch {i//batch_size + 1}: {e}")
+
+        msg_success = f"Successfully processed {processed_count} courses. Uploaded {actual_uploaded_count} courses to vector database."
         logger.info(msg_success)
         print(msg_success)
 
@@ -242,56 +292,46 @@ def load_course_data(data_dir: str = "data/") -> List[Dict]:
     print(msg_loading)
     all_courses = []
     
-    try:
-        if not os.path.isdir(data_dir):
-            err_msg = f"Data directory not found at {data_dir}"
-            logger.error(err_msg)
-            print(f"ERROR: {err_msg}")
-            return []
-            
-        for root, _, files in os.walk(data_dir):
-            for filename in files:
-                if filename.endswith(".json"):
-                    file_path = os.path.join(root, filename)
-                    logger.info(f"Processing file: {file_path}...") # Log individual file processing
-                    # print(f"Processing file: {file_path}...") # Decided against printing for every file
-                    try:
-                        with open(file_path, 'r', encoding='utf-8') as f:
-                            courses_in_file = json.load(f)
-                            if isinstance(courses_in_file, list):
-                                all_courses.extend(courses_in_file)
-                                # logger.info(f"Successfully loaded {len(courses_in_file)} courses from {filename}") # User commented this out
-                            elif isinstance(courses_in_file, dict):
-                                all_courses.append(courses_in_file)
-                                # logger.info(f"Successfully loaded 1 course from {filename}") # User commented this out
-                            else:
-                                warn_msg = f"{filename} does not contain a list or a single dictionary of courses. Skipping."
-                                logger.warning(warn_msg)
-                                print(f"Warning: {warn_msg}")
-                    except json.JSONDecodeError as e:
-                        err_msg_json = f"Error parsing JSON file {filename}: {e}"
-                        logger.error(err_msg_json)
-                        print(f"ERROR: {err_msg_json}")
-                    except Exception as e:
-                        err_msg_proc = f"An unexpected error occurred while processing {filename}: {e}"
-                        logger.error(err_msg_proc)
-                        print(f"ERROR: {err_msg_proc}")
-        
-        if not all_courses:
-            warn_msg_none = f"No courses found in JSON files in {data_dir} or its subdirectories"
-            logger.warning(warn_msg_none)
-            print(f"Warning: {warn_msg_none}")
-        else:
-            success_msg_load = f"Successfully loaded a total of {len(all_courses)} courses from {data_dir} and its subdirectories"
-            logger.info(success_msg_load)
-            print(success_msg_load)
-        return all_courses
-
-    except Exception as e:
-        err_msg_walk = f"An unexpected error occurred while recursively searching for JSON files in {data_dir}: {e}"
-        logger.error(err_msg_walk)
-        print(f"ERROR: {err_msg_walk}")
+    if not os.path.isdir(data_dir):
+        err_msg = f"Data directory not found at {data_dir}"
+        logger.error(err_msg)
+        print(f"ERROR: {err_msg}")
         return []
+            
+    for root, _, files in os.walk(data_dir):
+        for filename in files:
+            if filename.endswith(".json"):
+                file_path = os.path.join(root, filename)
+                logger.info(f"Processing file: {file_path}...")
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        courses_in_file = json.load(f)
+                        if isinstance(courses_in_file, list):
+                            all_courses.extend(courses_in_file)
+                        elif isinstance(courses_in_file, dict):
+                            all_courses.append(courses_in_file)
+                        else:
+                            warn_msg = f"{filename} does not contain a list or a single dictionary of courses. Skipping."
+                            logger.warning(warn_msg)
+                            print(f"Warning: {warn_msg}")
+                except json.JSONDecodeError as e:
+                    err_msg_json = f"Error parsing JSON file {filename}: {e}"
+                    logger.error(err_msg_json)
+                    print(f"ERROR: {err_msg_json}")
+                except Exception as e: # This except handles errors during file processing (not JSON parsing)
+                    err_msg_proc = f"An unexpected error occurred while processing {filename}: {e}"
+                    logger.error(err_msg_proc)
+                    print(f"ERROR: {err_msg_proc}")
+    
+    if not all_courses:
+        warn_msg_none = f"No courses found in JSON files in {data_dir} or its subdirectories"
+        logger.warning(warn_msg_none)
+        print(f"Warning: {warn_msg_none}")
+    else:
+        success_msg_load = f"Successfully loaded a total of {len(all_courses)} courses from {data_dir} and its subdirectories"
+        logger.info(success_msg_load)
+        print(success_msg_load)
+    return all_courses
 
 
 def main():

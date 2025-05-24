@@ -14,21 +14,28 @@ import uvicorn
 
 
 # Pydantic models for API
+class TimeSlotItem(BaseModel):
+    weekday: int
+    period: str
+    classroom: str
+
 class CourseResponse(BaseModel):
     name: str
-    course_number: str
+    identifier: str
     code: str
-    teacher: str
-    department: str
-    credit: int
-    time_raw: str
-    time_slots: List[Dict[str, Any]]
+    teacher_name: str
+    host_department: str
+    credits: int
+    time_slots: List[TimeSlotItem]
     classroom: Optional[str]
     targets: List[str]
     course_overview: Optional[str]
     course_objective: Optional[str]
-    comment: Optional[str]
+    notes: Optional[str]
     score: Optional[float] = None
+    id: str
+    serial: Optional[str] = None
+    original_json_string: Optional[str] = None
 
 
 class ScheduleRequest(BaseModel):
@@ -65,47 +72,31 @@ class CourseSearchAPI:
             self.client = QdrantClient(host=self.qdrant_host, port=self.qdrant_port, check_compatibility=False)
         
         if self.model is None:
-            print("Loading embedding model...")
-            self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-    
-    def parse_time_slots(self, time_str: str) -> List[Dict[str, Any]]:
-        """Parse time string into structured time slots"""
-        if not time_str or time_str.strip() == "":
-            return []
-        
-        time_slots = []
-        
-        # Handle patterns like "weekday 4, 234. " or "weekday 2, 789. "
-        weekday_pattern = r'weekday (\d+), ([0-9X]+)\.?'
-        matches = re.findall(weekday_pattern, time_str)
-        
-        for day, periods in matches:
-            # Convert day number to Chinese weekday
-            day_map = {
-                '1': '星期一', '2': '星期二', '3': '星期三', 
-                '4': '星期四', '5': '星期五', '6': '星期六', '0': '星期日'
-            }
-            
-            weekday = day_map.get(day, f'星期{day}')
-            
-            # Parse periods (like "234" means periods 2,3,4)
-            for char in periods:
-                if char.isdigit():
-                    period_num = int(char)
-                    time_slots.append({
-                        "weekday": weekday,
-                        "period": period_num,
-                        "time": f"{weekday}第{period_num}節"
-                    })
-        
-        return time_slots
+            model_name = "BAAI/bge-m3"
+            print(f"Attempting to load embedding model: {model_name}...")
+            try:
+                self.model = SentenceTransformer(model_name)
+                print(f"Successfully loaded embedding model: {model_name}.")
+            except Exception as e:
+                print(f"ERROR: Failed to load SentenceTransformer model '{model_name}'. Error: {e}")
+                # Depending on API behavior, you might want to raise an error here
+                # or let subsequent calls fail if the model is essential.
+                # For now, it will print the error and proceed, potentially failing later.
+                raise HTTPException(status_code=500, detail=f"Model loading failed: {str(e)}")
     
     def has_time_conflict(self, course1_slots: List[Dict], course2_slots: List[Dict]) -> bool:
-        """Check if two courses have time conflicts"""
+        """Check if two courses have time conflicts based on new time_slots structure."""
         for slot1 in course1_slots:
             for slot2 in course2_slots:
-                if (slot1["weekday"] == slot2["weekday"] and 
-                    slot1["period"] == slot2["period"]):
+                s1_weekday = slot1.get("weekday")
+                s1_period = slot1.get("period")
+                s2_weekday = slot2.get("weekday")
+                s2_period = slot2.get("period")
+
+                if (s1_weekday is not None and s1_period is not None and
+                    s2_weekday is not None and s2_period is not None and
+                    s1_weekday == s2_weekday and 
+                    s1_period == s2_period):
                     return True
         return False
     
@@ -155,9 +146,6 @@ class CourseSearchAPI:
         for result in results:
             course = result.payload
             course["score"] = float(result.score)
-            # Parse time slots if not already parsed
-            if "time_slots" not in course or not course["time_slots"]:
-                course["time_slots"] = self.parse_time_slots(course.get("time_raw", ""))
             courses.append(course)
         
         return courses
@@ -180,9 +168,6 @@ class CourseSearchAPI:
             
             if search_result[0]:
                 course = search_result[0][0].payload
-                # Parse time slots if not already parsed
-                if "time_slots" not in course or not course["time_slots"]:
-                    course["time_slots"] = self.parse_time_slots(course.get("time_raw", ""))
                 return course
         except Exception as e:
             print(f"Error retrieving course {course_code}: {e}")
@@ -206,10 +191,10 @@ class CourseSearchAPI:
         conflicts = []
         
         # Sort by credits (optional: could sort by other criteria)
-        courses.sort(key=lambda x: x.get("credit", 0), reverse=True)
+        courses.sort(key=lambda x: x.get("credits", 0), reverse=True)
         
         for course in courses:
-            course_credits = course.get("credit", 0)
+            course_credits = course.get("credits", 0)
             course_time_slots = course.get("time_slots", [])
             
             # Check credit limit

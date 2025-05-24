@@ -39,11 +39,12 @@ class InteractiveQuery:
         
         if self.model is None:
             try:
-                print("Loading embedding model (this may take a moment)...")
-                self.model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-                print("Embedding model loaded.")
+                model_name = "BAAI/bge-m3"
+                print(f"Attempting to load embedding model: {model_name} (this may take a moment)...")
+                self.model = SentenceTransformer(model_name)
+                print(f"Successfully loaded embedding model: {model_name}.")
             except Exception as e:
-                print(f"Error: Could not load sentence-transformer model.")
+                print(f"Error: Could not load sentence-transformer model '{model_name}'.")
                 print(f"Details: {e}")
                 sys.exit(1)
 
@@ -67,11 +68,15 @@ class InteractiveQuery:
             for hit in search_results:
                 payload = hit.payload
                 result = {
+                    "id": payload.get("id", "N/A"),
                     "name": payload.get("name", "N/A"),
-                    "teacher": payload.get("teacher", "N/A"),
-                    "department": payload.get("department", "N/A"),
+                    "identifier": payload.get("identifier", "N/A"),
+                    "teacher_name": payload.get("teacher_name", "N/A"),
+                    "host_department": payload.get("host_department", "N/A"),
                     "code": payload.get("code", "N/A"),
-                    "time_raw": payload.get("time_raw", "N/A"),
+                    "credits": payload.get("credits", 0),
+                    "time_slots": payload.get("time_slots", []),
+                    "notes": payload.get("notes", "N/A"),
                     "score": hit.score
                 }
                 results.append(result)
@@ -89,11 +94,23 @@ class InteractiveQuery:
         print("\nSearch Results:")
         print("-" * 30)
         for i, course in enumerate(results, 1):
-            print(f"{i}. {course['name']} (Score: {course['score']:.4f})")
-            print(f"   Teacher: {course['teacher']}")
-            print(f"   Department: {course['department']}")
+            print(f"{i}. {course['name']} (ID: {course['id']}, Score: {course['score']:.4f})")
+            print(f"   Identifier: {course['identifier']}")
+            print(f"   Teacher: {course['teacher_name']}")
+            print(f"   Department: {course['host_department']}")
             print(f"   Code: {course['code']}")
-            print(f"   Time: {course['time_raw']}")
+            print(f"   Credits: {course['credits']}")
+            
+            time_slots = course.get('time_slots', [])
+            if time_slots:
+                print("   Time Slots:")
+                for slot in time_slots:
+                    # Simple representation, can be enhanced with weekday mapping if desired
+                    print(f"     - Day: {slot.get('weekday')}, Period: {slot.get('period')}, Classroom: {slot.get('classroom', 'N/A')}")
+            else:
+                print("   Time Slots: Not available")
+            
+            print(f"   Notes: {course['notes']}")
             print("-" * 30)
 
     def run_interactive_loop(self):

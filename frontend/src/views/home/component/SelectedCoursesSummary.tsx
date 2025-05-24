@@ -56,7 +56,10 @@ const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
         </div>
         <div className="space-y-2">
           {selectedCourses.map((course) => (
-            <div key={course.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <div
+              key={course.id}
+              className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
+            >
               <div>
                 <span className="text-gray-800 font-medium">{course.name}</span>
                 <span className="text-gray-600 text-sm ml-2">({course.time})</span>

@@ -36,8 +36,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
   securityCourses,
   periodTable,
 }) => {
-  const periods = ['0', '1', '2', '3', '4', '6', '7', '8', '9', 'A', 'B', 'C', 'D'];
-  const days = ['週一', '週二', '週三', '週四', '週五'];
+  const periods = ["0", "1", "2", "3", "4", "6", "7", "8", "9", "A", "B", "C", "D"];
+  const days = ["週一", "週二", "週三", "週四", "週五"];
 
   if (generatedSchedule.length === 0) return null;
 
@@ -57,10 +57,19 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold">節次</th>
-                <th className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold">時間</th>
-                {days.map(day => (
-                  <th key={day} className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold">{day}</th>
+                <th className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold">
+                  節次
+                </th>
+                <th className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold">
+                  時間
+                </th>
+                {days.map((day) => (
+                  <th
+                    key={day}
+                    className="border border-gray-300 p-2 bg-blue-100 text-gray-900 font-semibold"
+                  >
+                    {day}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -74,7 +83,9 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                     {periodTable[period as keyof typeof periodTable]}
                   </td>
                   {days.map((day) => {
-                    const slot = generatedSchedule.find(s => s.day === day && s.period === period);
+                    const slot = generatedSchedule.find(
+                      (s) => s.day === day && s.period === period
+                    );
                     return (
                       <td key={day} className="border border-gray-300 p-1 min-w-[120px]">
                         {slot?.course ? (
@@ -82,12 +93,8 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({
                             <div className="font-semibold text-gray-900 text-xs mb-1">
                               {slot.course.name}
                             </div>
-                            <div className="text-xs text-gray-700">
-                              {slot.course.instructor}
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              {slot.course.location}
-                            </div>
+                            <div className="text-xs text-gray-700">{slot.course.instructor}</div>
+                            <div className="text-xs text-gray-600">{slot.course.location}</div>
                             <Badge className="mt-1 bg-blue-500 text-white text-xs">
                               {slot.course.credits}學分
                             </Badge>

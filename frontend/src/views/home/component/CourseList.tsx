@@ -37,23 +37,21 @@ const CourseList: React.FC<CourseListProps> = ({
     <CardContent>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {courses.map((course) => {
-          const isSelected = selectedCourses.find(c => c.id === course.id);
+          const isSelected = selectedCourses.find((c) => c.id === course.id);
           return (
             <div
               key={course.id}
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
-                isSelected 
-                  ? 'border-blue-500 bg-blue-50 shadow-md' 
-                  : 'border-gray-300 bg-white hover:border-blue-400 hover:shadow-sm'
+                isSelected
+                  ? "border-blue-500 bg-blue-50 shadow-md"
+                  : "border-gray-300 bg-white hover:border-blue-400 hover:shadow-sm"
               }`}
               onClick={() => toggleCourseSelection(course)}
             >
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <h3 className="font-semibold text-gray-900 text-sm">{course.name}</h3>
-                  <Badge className="bg-blue-100 text-blue-800 text-xs">
-                    {course.credits} 學分
-                  </Badge>
+                  <Badge className="bg-blue-100 text-blue-800 text-xs">{course.credits} 學分</Badge>
                 </div>
                 <div className="space-y-2 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
@@ -77,9 +75,7 @@ const CourseList: React.FC<CourseListProps> = ({
                     {course.enrolled}/{course.capacity} 人
                   </span>
                 </div>
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  {course.description}
-                </p>
+                <p className="text-xs text-gray-500 leading-relaxed">{course.description}</p>
               </div>
             </div>
           );

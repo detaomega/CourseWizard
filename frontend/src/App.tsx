@@ -1,11 +1,14 @@
-import { Button } from "@/components/ui/button"
+import { Routes, Route } from "react-router-dom";
+import HomePage from "./views/home/HomePage";
 
-function App() {
+const App: React.FC = () => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-svh">
-      <Button>Click me</Button>
-    </div>
-  )
-}
+    <Routes>
+      <Route path="/" element={<HomePage />} />
 
-export default App
+      {/* More route... */}
+    </Routes>
+  );
+};
+
+export default App;

@@ -10,10 +10,10 @@ interface Course {
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface CourseListProps {
@@ -40,7 +40,7 @@ const CourseList: React.FC<CourseListProps> = ({
           const isSelected = selectedCourses.find((c) => c.id === course.id);
           return (
             <div
-              key={course.id}
+              key={course.id + course.instructor + course.time}
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                 isSelected
                   ? "border-blue-500 bg-blue-50 shadow-md"
@@ -69,7 +69,7 @@ const CourseList: React.FC<CourseListProps> = ({
                 </div>
                 <div className="flex justify-between items-center">
                   <Badge variant="outline" className="border-purple-400 text-purple-700">
-                    {course.type}
+                    {course.host_department}
                   </Badge>
                   <span className="text-xs text-gray-500">
                     {course.enrolled}/{course.capacity} 人

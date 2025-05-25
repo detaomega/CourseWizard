@@ -10,10 +10,10 @@ interface Course {
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface ScheduleSlot {

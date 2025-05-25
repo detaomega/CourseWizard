@@ -3,6 +3,7 @@ import CourseSearchBar from "./component/CourseSearchBar";
 import CourseList from "./component/CourseList";
 import SelectedCoursesSummary from "./component/SelectedCoursesSummary";
 import ScheduleTable from "./component/ScheduleTable";
+import { getSearch } from "@/services/searchService";
 
 interface Course {
   id: string;
@@ -11,10 +12,10 @@ interface Course {
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface ScheduleSlot {
@@ -60,7 +61,7 @@ const HomePage: React.FC = () => {
       instructor: "王建民",
       time: "週一 3-4",
       location: "資訊系館 104",
-      type: "資安核心",
+      host_department: "資訊工程學系",
       capacity: 50,
       enrolled: 32,
       description: "介紹網絡安全的基本概念與實務應用，包含防火牆、入侵偵測等技術",
@@ -72,7 +73,7 @@ const HomePage: React.FC = () => {
       instructor: "李宏毅",
       time: "週一 3-4",
       location: "資訊系館 201",
-      type: "資安核心",
+      host_department: "資訊工程學系",
       capacity: 40,
       enrolled: 28,
       description: "現代密碼學理論與加密演算法，包含對稱式與非對稱式加密",
@@ -84,7 +85,7 @@ const HomePage: React.FC = () => {
       instructor: "張智星",
       time: "週三 8-9",
       location: "資訊系館 301",
-      type: "資安核心",
+      host_department: "資訊工程學系",
       capacity: 45,
       enrolled: 35,
       description: "作業系統與系統層級的安全機制，探討緩衝區溢位與權限控制",
@@ -96,7 +97,7 @@ const HomePage: React.FC = () => {
       instructor: "陳良弼",
       time: "週四 2-3",
       location: "管理學院 205",
-      type: "資安選修",
+      host_department: "資訊工程學系",
       capacity: 60,
       enrolled: 42,
       description: "資訊安全相關法規與風險管理，包含個資法、營業秘密法等",
@@ -108,7 +109,7 @@ const HomePage: React.FC = () => {
       instructor: "林軒田",
       time: "週五 3-4",
       location: "資訊系館 401",
-      type: "資安選修",
+      host_department: "資訊工程學系",
       capacity: 30,
       enrolled: 25,
       description: "惡意軟體的檢測、分析與防護技術，包含靜態與動態分析方法",
@@ -120,7 +121,7 @@ const HomePage: React.FC = () => {
       instructor: "黃鐘揚",
       time: "週一 8-9",
       location: "資訊系館 501",
-      type: "資安實務",
+      host_department: "資訊工程學系",
       capacity: 25,
       enrolled: 20,
       description: "滲透測試方法論與實務操作，包含網頁應用程式與系統滲透",
@@ -132,7 +133,7 @@ const HomePage: React.FC = () => {
       instructor: "呂學一",
       time: "週二 A-B",
       location: "資訊系館 601",
-      type: "資安選修",
+      host_department: "資訊工程學系",
       capacity: 35,
       enrolled: 18,
       description: "數位證據蒐集與分析技術，包含檔案系統與網路封包分析",
@@ -144,9 +145,8 @@ const HomePage: React.FC = () => {
       instructor: "廖世偉",
       time: "週三 6-7",
       location: "資訊系館 102",
-      type: "資安選修",
+      host_department: "資訊工程學系",
       capacity: 40,
-      enrolled: 33,
       description: "區塊鏈技術與智能合約安全，探討去中心化應用的安全議題",
     },
   ];
@@ -154,18 +154,25 @@ const HomePage: React.FC = () => {
   const handleSearch = async () => {
     setIsLoading(true);
     // 模擬 API 調用
-    setTimeout(() => {
-      const filteredCourses = mockCourses.filter(
-        (course) =>
-          course.name.includes(searchQuery) ||
-          course.description.includes(searchQuery) ||
-          course.type.includes("資安") ||
-          searchQuery.includes("資安")
-      );
-      setCourses(filteredCourses);
-      setShowResults(true);
-      setIsLoading(false);
-    }, 1000);
+    console.log("Searching for courses with query:", searchQuery);
+    const filteredCourses = await getSearch(searchQuery);
+    console.log(filteredCourses);
+    setCourses([]);
+    setCourses(filteredCourses);
+    setShowResults(true);
+    setIsLoading(false);
+    // setTimeout(() => {
+    //   const filteredCourses = mockCourses.filter(
+    //     (course) =>
+    //       course.name.includes(searchQuery) ||
+    //       course.description.includes(searchQuery) ||
+    //       searchQuery.includes("資安")
+    //   );
+    //   setCourses(filteredCourses);
+    //   setShowResults(true);
+    //   setIsLoading(false);
+    // }, 1000);
+    // console.log("Searching for courses with query:", await getSearch("川普"));
   };
 
   const toggleCourseSelection = (course: Course) => {
@@ -224,7 +231,7 @@ const HomePage: React.FC = () => {
   };
 
   const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
-  const securityCourses = selectedCourses.filter((course) => course.type.includes("資安")).length;
+  const securityCourses = selectedCourses.filter((course) => course.host_department.includes("資安")).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">

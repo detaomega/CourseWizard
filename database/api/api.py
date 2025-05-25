@@ -12,6 +12,11 @@ from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
 import uvicorn
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from database.config import collection_names, weights
+
 
 # Pydantic models for API
 class TimeSlotItem(BaseModel):
@@ -63,7 +68,8 @@ class CourseSearchAPI:
         self.model = None
         self.qdrant_host = qdrant_host
         self.qdrant_port = qdrant_port
-        self.collection_name = "ntu_courses"
+        self.collection_names = collection_names
+        self.weights = weights
     
     def _lazy_init(self):
         """Lazy initialization of heavy components"""
@@ -114,41 +120,35 @@ class CourseSearchAPI:
         if department:
             filters["department"] = department
         
-        try:
-            search_result = self.client.query_points(
-                collection_name=self.collection_name,
-                query=query_vector,
+        course_scrores = {}
+        course_data = {}
+        for attr, collection_name in self.collection_names.items():
+            results = self.client.search(
+                collection_name = collection_name,
+                query_vector=query_vector,
                 query_filter=models.Filter(
                     must=[models.FieldCondition(key=k, match=models.MatchValue(value=v)) 
-                          for k, v in filters.items()]
+                        for k, v in filters.items()]
                 ) if filters else None,
-                limit=top_k,
-                with_payload=True
+                limit = top_k*len(self.collection_names),
+                with_payload=True,
             )
-            results = search_result.points
-        except Exception:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                search_result = self.client.search(
-                    collection_name=self.collection_name,
-                    query_vector=query_vector,
-                    query_filter=models.Filter(
-                        must=[models.FieldCondition(key=k, match=models.MatchValue(value=v)) 
-                              for k, v in filters.items()]
-                    ) if filters else None,
-                    limit=top_k,
-                    with_payload=True
-                )
-            results = search_result
+            for point in results:
+                course_id = point.payload['id']
+                score = float(point.score) * self.weights[attr]
+                if course_id not in course_scrores:
+                    course_scrores[course_id] = 0
+                    course_data[course_id] = point.payload
+                course_scrores[course_id] += score
         
-        courses = []
-        for result in results:
-            course = result.payload
-            course["score"] = float(result.score)
-            courses.append(course)
+        sorted_courses = sorted(course_scrores.items(), key=lambda x: x[1], reverse=True)
+        final_results = []
+        for course_id, score in sorted_courses[:top_k]:
+            course = course_data[course_id]
+            course["score"] = float(score)
+            final_results.append(course)
         
-        return courses
+        return final_results
     
     def get_course_by_code(self, course_code: str) -> Optional[Dict[str, Any]]:
         """Get specific course by code"""
@@ -156,7 +156,7 @@ class CourseSearchAPI:
         
         try:
             search_result = self.client.scroll(
-                collection_name=self.collection_name,
+                collection_name=self.collection_names['name'],
                 scroll_filter=models.Filter(
                     must=[models.FieldCondition(
                         key="code",

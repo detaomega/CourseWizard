@@ -13,6 +13,11 @@ from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from database.config import collection_names
+
 # --- Logger Setup ---
 LOG_DIR = "logs"
 LOG_FILE = os.path.join(LOG_DIR, "embed_upload.log") # Updated LOG_FILE path
@@ -69,7 +74,7 @@ class CourseEmbedder:
             logger.error(f"Failed to load SentenceTransformer model '{self.model_name}'. Error: {e}")
             print(f"ERROR: Failed to load SentenceTransformer model '{self.model_name}'. Ensure it is installed or accessible. Error: {e}")
             raise
-        self.collection_name = "ntu_courses"
+        self.collection_names = collection_names
         logger.info("Initialization complete.")
         print("Initialization complete.")
     
@@ -151,10 +156,10 @@ class CourseEmbedder:
             return None
 
         # Create embedding text
-        embedding_text = self.create_embedding_text(course)
+        # embedding_text = self.create_embedding_text(course)
         
         # Generate embedding
-        embedding = self.model.encode(embedding_text).tolist()
+        # embedding = self.model.encode(embedding_text).tolist()
         
         # Parse time slots from schedules array
         time_slots = self.parse_time_slots(course.get('schedules', []))
@@ -189,45 +194,47 @@ class CourseEmbedder:
             "course_overview": self._get_nested_value(course, ['info', '課程概述'], ''),
             "course_objective": self._get_nested_value(course, ['info', '課程目標'], ''),
             
-            "embedding_text": embedding_text, # For debugging
+            # "embedding_text": embedding_text, # For debugging
             "original_json_string": original_json_string # Store full original JSON
             # "full_text" was removed as embedding_text serves a similar purpose for search debugging
         }
         
-        return PointStruct(
-            id=course_id, # Use UUID from course data
-            vector=embedding,
-            payload=payload
-        )
+        return payload
+        # return PointStruct(
+        #     id=course_id, # Use UUID from course data
+        #     vector=embedding,
+        #     payload=payload
+        # )
     
-    def create_collection(self):
+    def create_collections(self):
         """Create or recreate the courses collection"""
         msg = "\nCreating vector database collection..."
         logger.info(msg)
         print(msg)
         
-        try:
-            # Delete existing collection if it exists
-            self.client.delete_collection(collection_name=self.collection_name)
-            msg = f"Deleted existing collection: {self.collection_name}"
+        for attr, collection_name in self.collection_names.items():
+            try:
+                # Delete existing collection if it exists
+                self.client.delete_collection(collection_name=collection_name)
+                msg = f"Deleted existing collection: {collection_name}"
+                logger.info(msg)
+                print(msg)
+            except Exception as e:
+                msg = f"Collection {collection_name} may not exist or could not be deleted: {e}"
+                logger.warning(msg)
+                print(f"Warning: {msg}")
+        
+            # Create new collection
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(
+                    size=self.embedding_dim,  # Use dynamic embedding_dim from loaded model
+                    distance=Distance.COSINE
+                )
+            )
+            msg = f"Created collection: {collection_name} with vector size {self.embedding_dim}"
             logger.info(msg)
             print(msg)
-        except Exception as e:
-            msg = f"Collection {self.collection_name} may not exist or could not be deleted: {e}"
-            logger.warning(msg)
-            print(f"Warning: {msg}")
-        
-        # Create new collection
-        self.client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(
-                size=self.embedding_dim,  # Use dynamic embedding_dim from loaded model
-                distance=Distance.COSINE
-            )
-        )
-        msg = f"Created collection: {self.collection_name} with vector size {self.embedding_dim}"
-        logger.info(msg)
-        print(msg)
     
     def upload_courses(self, courses: List[Dict]):
         """Upload course data to vector database"""
@@ -240,49 +247,71 @@ class CourseEmbedder:
         logger.info(msg_starting)
         print(msg_starting)
         
-        points = []
         processed_count = 0
         skipped_count = 0
         
-        for i, course_data in enumerate(courses):
-            logger.debug(f"Processing course {i+1}/{num_total_courses}: {self._get_nested_value(course_data, ['name'], 'Unknown Name')[:50]}...")
-            point = self.process_course(course_data) # Pass the whole course dict
-            if point:
-                points.append(point)
-                processed_count += 1
-            else:
-                skipped_count +=1
-        
-        if skipped_count > 0:
-            msg_skipped = f"Skipped {skipped_count} courses due to missing 'id' or other processing issues."
-            logger.warning(msg_skipped)
-            print(f"Warning: {msg_skipped}")
+        for attr, collection_name in self.collection_names.items():
+            points = []
+            for i, course_data in enumerate(courses):
+                logger.debug(f"Processing course {i+1}/{num_total_courses}: {self._get_nested_value(course_data, ['name'], 'Unknown Name')[:50]}...")
+                # point = self.process_course(course_data) # Pass the whole course dict
+                # if point:
+                #     points.append(point)
+                #     processed_count += 1
+                # else:
+                #     skipped_count +=1
 
-        if not points:
-            msg_no_points = "No valid course data points to upload after processing."
-            logger.warning(msg_no_points)
-            print(f"Warning: {msg_no_points}")
-            return
-
-        # Upload in batches
-        batch_size = 100
-        actual_uploaded_count = 0
-        for i in range(0, len(points), batch_size):
-            batch = points[i:i+batch_size]
-            try:
-                self.client.upsert(
-                    collection_name=self.collection_name,
-                    points=batch
+                parsed_data = self.process_course(course_data)
+                if parsed_data:
+                    processed_count += 1
+                else:
+                    skipped_count += 1
+                    continue
+                
+                if parsed_data[attr] is None or parsed_data[attr] == '':
+                    logger.warning(f"Skipping course {parsed_data['id']} due to missing attribute '{attr}'")
+                    print(f"Warning: Skipping course {parsed_data['id']} due to missing attribute '{attr}'")
+                    skipped_count += 1
+                    continue
+                embedding = self.model.encode(parsed_data[attr]).tolist()
+                point = PointStruct(
+                    id = parsed_data['id'],
+                    vector = embedding,
+                    payload = parsed_data
                 )
-                actual_uploaded_count += len(batch)
-                logger.info(f"Uploaded batch {i//batch_size + 1}/{(len(points) + batch_size - 1)//batch_size}, {len(batch)} points.")
-            except Exception as e:
-                logger.error(f"Error uploading batch {i//batch_size + 1}: {e}")
-                print(f"ERROR: Error uploading batch {i//batch_size + 1}: {e}")
+                points.append(point)   
+        
+            if skipped_count > 0:
+                msg_skipped = f"Skipped {skipped_count} courses due to missing 'id' or other processing issues."
+                logger.warning(msg_skipped)
+                print(f"Warning: {msg_skipped}")
 
-        msg_success = f"Successfully processed {processed_count} courses. Uploaded {actual_uploaded_count} courses to vector database."
-        logger.info(msg_success)
-        print(msg_success)
+            if not points:
+                msg_no_points = "No valid course data points to upload after processing."
+                logger.warning(msg_no_points)
+                print(f"Warning: {msg_no_points}")
+                continue
+                # return
+
+            # Upload in batches
+            batch_size = 100
+            actual_uploaded_count = 0
+            for i in range(0, len(points), batch_size):
+                batch = points[i:i+batch_size]
+                try:
+                    self.client.upsert(
+                        collection_name=collection_name,
+                        points=batch
+                    )
+                    actual_uploaded_count += len(batch)
+                    logger.info(f"Uploaded batch {i//batch_size + 1}/{(len(points) + batch_size - 1)//batch_size}, {len(batch)} points.")
+                except Exception as e:
+                    logger.error(f"Error uploading batch {i//batch_size + 1}: {e}")
+                    print(f"ERROR: Error uploading batch {i//batch_size + 1}: {e}")
+
+            msg_success = f"Successfully processed {processed_count} courses. Uploaded {actual_uploaded_count} courses to vector database."
+            logger.info(msg_success)
+            print(msg_success)
 
 
 def load_course_data(data_dir: str = "data/") -> List[Dict]:
@@ -352,7 +381,7 @@ def main():
     
     embedder = CourseEmbedder()
     
-    embedder.create_collection()
+    embedder.create_collections()
     
     embedder.upload_courses(courses)
     

@@ -33,21 +33,25 @@ class APITester:
     
     def test_search_endpoint(self) -> bool:
         """Test semantic search endpoint"""
-        test_queries = [
-            "machine learning",
-            "data structures",
-            "english course",
-            "計算機概論"
+        paramss = [
+            {"q": "計算機圖形", "limit": 3},
+            {"q": "machine learning", "limit": 3},
+            {"q": "machine learning", "limit": 3, "departments": ["資訊工程學研究所"]},
+            {"q": "data structures", "limit": 3},
+            {"q": "english course", "limit": 3},
+            {"q": "english course", "limit": 3, "departments": ["資訊工程學系"]},
+            {"q": "計算機概論", "limit": 3}
         ]
+
         
         print("\nTesting search endpoint...")
         all_passed = True
         
-        for query in test_queries:
+        for params in paramss:
             try:
                 response = requests.get(
                     f"{self.base_url}/search",
-                    params={"q": query, "limit": 3},
+                    params=params,
                     timeout=10
                 )
                 
@@ -65,21 +69,21 @@ class APITester:
                             if not (isinstance(first_slot.get('weekday'), int) and \
                                     isinstance(first_slot.get('period'), str) and \
                                     isinstance(first_slot.get('classroom'), str)):
-                                print(f"  WARN - Query: '{query}' -> Time_slots structure incorrect: {first_slot}")
+                                print(f"  WARN - Query: '{params}' -> Time_slots structure incorrect: {first_slot}")
                                 # all_passed = False # Decide if this is a hard fail
                         elif best_match.get('id'): # if id exists, time_slots should ideally exist, even if empty
-                            print(f"  WARN - Query: '{query}' -> '{name}' has no time_slots array.")
+                            print(f"  WARN - Query: '{params}' -> '{name}' has no time_slots array.")
 
-                        print(f"  PASS - Query: '{query}' -> '{name}' (ID: {best_match.get('id')}, Score: {score:.3f})")
+                        print(f"  PASS - Query: '{params}' -> '{name}' (ID: {best_match.get('id')}, Score: {score:.3f})")
                     else:
-                        print(f"  FAIL - Query: '{query}' -> No results")
+                        print(f"  FAIL - Query: '{params}' -> No results")
                         all_passed = False
                 else:
-                    print(f"  FAIL - Query: '{query}' -> Status {response.status_code}, Response: {response.text}")
+                    print(f"  FAIL - Query: '{params}' -> Status {response.status_code}, Response: {response.text}")
                     all_passed = False
                     
             except Exception as e:
-                print(f"  FAIL - Query: '{query}' -> Error: {e}")
+                print(f"  FAIL - Query: '{params}' -> Error: {e}")
                 all_passed = False
         
         return all_passed
@@ -206,7 +210,7 @@ class APITester:
             test_recommendation_request = {
                 "query": "artificial intelligence",
                 "max_credits": 15,
-                "semester": "113-2"
+                "semesters": ["113-2"]
             }
             
             response = requests.post(

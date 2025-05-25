@@ -10,6 +10,11 @@ from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from database.config import collection_names, weights
+
 class InteractiveQuery:
     def __init__(self, qdrant_host: str = "localhost", qdrant_port: int = 6333):
         """Initialize interactive query tool"""
@@ -17,7 +22,8 @@ class InteractiveQuery:
         self.model = None
         self.qdrant_host = qdrant_host
         self.qdrant_port = qdrant_port
-        self.collection_name = "ntu_courses"
+        self.collection_names = collection_names
+        self.weights = weights
         
         print("Interactive Course Query Tool")
         print("Type 'exit' or 'quit' to stop.")
@@ -53,37 +59,45 @@ class InteractiveQuery:
         if not self.client or not self.model:
             print("Error: Qdrant client or model not initialized.")
             return []
+    
+        query_vector = self.model.encode(query_text).tolist()
 
-        try:
-            query_vector = self.model.encode(query_text).tolist()
-            
-            search_results = self.client.search(
-                collection_name=self.collection_name,
+        course_scrores = {}
+        course_data = {}
+        # try:
+        now_len = 0
+        for attr, collection_name in self.collection_names.items():
+            now_len += 1
+            results = self.client.search(
+                collection_name = collection_name,
                 query_vector=query_vector,
-                limit=top_k,
-                with_payload=True
+                limit = top_k*len(self.collection_names),
+                with_payload=True,
             )
+            for point in results:
+                course_id = point.payload['id']
+                score = float(point.score) * self.weights[attr]
+                if course_id not in course_scrores:
+                    course_scrores[course_id] = []
+                    course_data[course_id] = point.payload
+                course_scrores[course_id].append(score)
             
-            results = []
-            for hit in search_results:
-                payload = hit.payload
-                result = {
-                    "id": payload.get("id", "N/A"),
-                    "name": payload.get("name", "N/A"),
-                    "identifier": payload.get("identifier", "N/A"),
-                    "teacher_name": payload.get("teacher_name", "N/A"),
-                    "host_department": payload.get("host_department", "N/A"),
-                    "code": payload.get("code", "N/A"),
-                    "credits": payload.get("credits", 0),
-                    "time_slots": payload.get("time_slots", []),
-                    "notes": payload.get("notes", "N/A"),
-                    "score": hit.score
-                }
-                results.append(result)
-            return results
-        except Exception as e:
-            print(f"Error during search: {e}")
-            return []
+            for course_id, scores in course_scrores.items():
+                if len(scores) < now_len:
+                    course_scrores[course_id].append(0.0)
+        
+        sorted_courses = sorted(course_scrores.items(), key=lambda x: sum(x[1]), reverse=True)
+        print("Sorted course scores and names:")
+        for course_id, scores in sorted_courses:
+            name = course_data[course_id]["name"]
+            print(f"Name: {name}, Scores: {scores}")
+        final_results = []
+        for course_id, score in sorted_courses[:top_k]:
+            course = course_data[course_id]
+            course["score"] = score
+            final_results.append(course)
+        
+        return final_results
 
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in a user-friendly format"""
@@ -94,7 +108,7 @@ class InteractiveQuery:
         print("\nSearch Results:")
         print("-" * 30)
         for i, course in enumerate(results, 1):
-            print(f"{i}. {course['name']} (ID: {course['id']}, Score: {course['score']:.4f})")
+            print(f"{i}. {course['name']} (ID: {course['id']}, Score: {course['score']})")
             print(f"   Identifier: {course['identifier']}")
             print(f"   Teacher: {course['teacher_name']}")
             print(f"   Department: {course['host_department']}")

@@ -5,12 +5,17 @@ FastAPI service for semantic course search and intelligent scheduling
 """
 
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient, models
 import uvicorn
+
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from database.config import collection_names, weights
 
 
 # Pydantic models for API
@@ -53,7 +58,7 @@ class ScheduleResponse(BaseModel):
 class RecommendationRequest(BaseModel):
     query: str
     max_credits: int = 18
-    semester: str = "113-2"
+    semesters: List[str] = ["113-2"]
 
 
 class CourseSearchAPI:
@@ -63,7 +68,8 @@ class CourseSearchAPI:
         self.model = None
         self.qdrant_host = qdrant_host
         self.qdrant_port = qdrant_port
-        self.collection_name = "ntu_courses"
+        self.collection_names = collection_names
+        self.weights = weights
     
     def _lazy_init(self):
         """Lazy initialization of heavy components"""
@@ -100,63 +106,62 @@ class CourseSearchAPI:
                     return True
         return False
     
-    def search_courses(self, query: str, semester: str = None, department: str = None, 
-                      top_k: int = 10) -> List[Dict[str, Any]]:
-        """Semantic search for courses"""
+    def search_courses(self, query: str, semesters: str = None, departments: List[str] = None, 
+                    top_k: int = 10, ) -> List[Dict[str, Any]]:
+        """Semantic search for courses with optional department filter"""
         self._lazy_init()
-        
+
         query_vector = self.model.encode(query).tolist()
-        
-        # Build filters
-        filters = {}
-        if semester:
-            filters["semester"] = semester
-        if department:
-            filters["department"] = department
-        
-        try:
-            search_result = self.client.query_points(
-                collection_name=self.collection_name,
-                query=query_vector,
+
+        query_filters = []
+        if semesters:
+            query_filters.append(models.FieldCondition(
+                key="semester",
+                match=models.MatchAny(any=semesters)
+            ))
+        if departments:
+            query_filters.append(models.FieldCondition(
+                key="host_department",
+                match=models.MatchAny(any=departments)
+            ))
+
+        course_scrores = {}
+        course_data = {}
+        for attr, collection_name in self.collection_names.items():
+            results = self.client.search(
+                collection_name = collection_name,
+                query_vector=query_vector,
                 query_filter=models.Filter(
-                    must=[models.FieldCondition(key=k, match=models.MatchValue(value=v)) 
-                          for k, v in filters.items()]
-                ) if filters else None,
-                limit=top_k,
-                with_payload=True
+                    must=query_filters
+                ) if query_filters else None,
+                limit = top_k*len(self.collection_names),
+                with_payload=True,
             )
-            results = search_result.points
-        except Exception:
-            import warnings
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                search_result = self.client.search(
-                    collection_name=self.collection_name,
-                    query_vector=query_vector,
-                    query_filter=models.Filter(
-                        must=[models.FieldCondition(key=k, match=models.MatchValue(value=v)) 
-                              for k, v in filters.items()]
-                    ) if filters else None,
-                    limit=top_k,
-                    with_payload=True
-                )
-            results = search_result
+            for point in results:
+                course_id = point.payload['id']
+                score = float(point.score) * self.weights[attr]
+                if course_id not in course_scrores:
+                    course_scrores[course_id] = 0
+                    course_data[course_id] = point.payload
+                course_scrores[course_id] += score
         
-        courses = []
-        for result in results:
-            course = result.payload
-            course["score"] = float(result.score)
-            courses.append(course)
+        sorted_courses = sorted(course_scrores.items(), key=lambda x: x[1], reverse=True)
+        final_results = []
+        for course_id, score in sorted_courses[:top_k]:
+            course = course_data[course_id]
+            course["score"] = float(score)
+            final_results.append(course)
         
-        return courses
-    
+        return final_results
+
+
     def get_course_by_code(self, course_code: str) -> Optional[Dict[str, Any]]:
         """Get specific course by code"""
         self._lazy_init()
         
         try:
             search_result = self.client.scroll(
-                collection_name=self.collection_name,
+                collection_name=self.collection_names['name'],
                 scroll_filter=models.Filter(
                     must=[models.FieldCondition(
                         key="code",
@@ -223,12 +228,12 @@ class CourseSearchAPI:
         }
     
     def recommend_courses(self, query: str, max_credits: int = 18, 
-                         semester: str = "113-2") -> Dict[str, Any]:
+                         semesters: List[str] = ["113-2"]) -> Dict[str, Any]:
         """AI-powered course recommendations"""
         # Get initial recommendations via semantic search
         recommended_courses = self.search_courses(
             query=query,
-            semester=semester,
+            semesters=semesters,
             top_k=20  # Get more candidates for filtering
         )
         
@@ -259,16 +264,16 @@ async def root():
 @app.get("/search")
 async def search_courses(
     q: str = Query(..., description="Search query"),
-    semester: Optional[str] = Query(None, description="Filter by semester"),
-    department: Optional[str] = Query(None, description="Filter by department"),
+    semesters: Optional[List[str]] = Query(None, description="Filter by semester"),
+    departments: Optional[List[str]] = Query(None, description="Filter by department"),
     top_k: int = Query(10, description="Number of results to return")
 ):
     """Semantic search for courses"""
     try:
         results = api.search_courses(
             query=q,
-            semester=semester,
-            department=department,
+            semesters=semesters,
+            departments=departments,
             top_k=top_k
         )
         return {"query": q, "results": results, "count": len(results)}
@@ -303,7 +308,7 @@ async def recommend_courses(request: RecommendationRequest):
         result = api.recommend_courses(
             query=request.query,
             max_credits=request.max_credits,
-            semester=request.semester
+            semesters=request.semesters
         )
         return result
     except Exception as e:

@@ -27,6 +27,7 @@ interface ScheduleSlot {
 
 const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [departments, setDepartments] = useState<string[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourses, setSelectedCourses] = useState<Course[]>([]);
   const [generatedSchedule, setGeneratedSchedule] = useState<ScheduleSlot[]>([]);
@@ -155,7 +156,8 @@ const HomePage: React.FC = () => {
     setIsLoading(true);
     // 模擬 API 調用
     console.log("Searching for courses with query:", searchQuery);
-    const filteredCourses = await getSearch(searchQuery);
+    console.log("Selected departments:", departments);
+    const filteredCourses = await getSearch(searchQuery, departments);
     console.log(filteredCourses);
     setCourses([]);
     setCourses(filteredCourses);
@@ -246,6 +248,8 @@ const HomePage: React.FC = () => {
         <CourseSearchBar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          departments={departments}
+          setDepartments={setDepartments}
           handleSearch={handleSearch}
           isLoading={isLoading}
         />

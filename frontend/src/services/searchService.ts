@@ -83,9 +83,18 @@ export const transformApiDataToCourses = (apiData: ApiResponse): Course[] => {
   }));
 };
 
-export const getSearch = async (query: string): Promise<Course[]> => {
+export const getSearch = async (query: string, departments: string[] = []): Promise<Course[]> => {
   try {
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    console.log('Fetching search results for query:', query, 'and departments:', departments);
+
+    // Log the final URL for debugging
+    var query_url: string = `/api/search?q=${encodeURIComponent(query)}`;
+    for (const department of departments) {
+      query_url += `&departments=${encodeURIComponent(department)}`;
+    }
+    console.log(`/api/search?q=${encodeURIComponent(query)}`);
+
+    const response = await fetch(`${query_url}`);
      
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);

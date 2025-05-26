@@ -1,8 +1,10 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import departmens from "@/data/departments.json";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import React from "react";
+import Select from 'react-select';
 
 interface CourseSearchBarProps {
   searchQuery: string;
@@ -43,6 +45,18 @@ const CourseSearchBar: React.FC<CourseSearchBarProps> = ({
         >
           {isLoading ? "搜索中..." : "搜索課程"}
         </Button>
+      </div>
+      <div className="mt-4">
+        <Select
+          options={departmens}
+          isMulti
+          placeholder="篩選科系"
+          classNamePrefix="select"
+          onChange={(selectedOptions) => {
+            // Handle selected options here
+            console.log(selectedOptions);
+          }}
+        />
       </div>
     </CardContent>
   </Card>

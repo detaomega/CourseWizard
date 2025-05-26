@@ -136,7 +136,6 @@ const HomePage: React.FC = () => {
   };
 
   const totalCredits = selectedCourses.reduce((sum, course) => sum + course.credits, 0);
-  const securityCourses = selectedCourses.filter((course) => course.host_department.includes("資安")).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6">
@@ -170,7 +169,6 @@ const HomePage: React.FC = () => {
         <SelectedCoursesSummary
           selectedCourses={selectedCourses}
           totalCredits={totalCredits}
-          securityCourses={securityCourses}
           isLoading={isLoading}
           toggleCourseSelection={toggleCourseSelection}
           generateSchedule={generateSchedule}
@@ -180,7 +178,6 @@ const HomePage: React.FC = () => {
         <ScheduleTable
           generatedSchedule={generatedSchedule}
           totalCredits={totalCredits}
-          securityCourses={securityCourses}
           periodTable={periodTable}
         />
       </div>

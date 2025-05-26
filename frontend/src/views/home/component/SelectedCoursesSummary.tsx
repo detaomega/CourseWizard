@@ -21,7 +21,6 @@ interface Course {
 interface SelectedCoursesSummaryProps {
   selectedCourses: Course[];
   totalCredits: number;
-  securityCourses: number;
   isLoading: boolean;
   toggleCourseSelection: (course: Course) => void;
   generateSchedule: () => void;
@@ -30,7 +29,6 @@ interface SelectedCoursesSummaryProps {
 const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
   selectedCourses,
   totalCredits,
-  securityCourses,
   isLoading,
   toggleCourseSelection,
   generateSchedule,
@@ -46,10 +44,6 @@ const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-gray-700">總學分：</span>
             <Badge className="bg-green-100 text-green-800">{totalCredits} 學分</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-700">資安課程：</span>
-            <Badge className="bg-purple-100 text-purple-800">{securityCourses} 門</Badge>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-gray-700">已選課程：</span>

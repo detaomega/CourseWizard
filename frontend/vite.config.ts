@@ -12,6 +12,7 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts: ['sql.fgcn.csie.ntu.edu.tw'],
     proxy: {
       "/api": {
         target: "http://localhost:8000", // 替換為你的後端服務地址

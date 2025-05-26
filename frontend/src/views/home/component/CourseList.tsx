@@ -7,13 +7,15 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface CourseListProps {
@@ -37,10 +39,12 @@ const CourseList: React.FC<CourseListProps> = ({
     <CardContent>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {courses.map((course) => {
-          const isSelected = selectedCourses.find((c) => c.id === course.id);
+          // console.log("Rendering course:", course.id);
+          // console.log(course);
+          const isSelected = selectedCourses.find((c) => c.serial === course.serial);
           return (
             <div
-              key={course.id}
+              key={course.serial}
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                 isSelected
                   ? "border-blue-500 bg-blue-50 shadow-md"
@@ -69,7 +73,17 @@ const CourseList: React.FC<CourseListProps> = ({
                 </div>
                 <div className="flex justify-between items-center">
                   <Badge variant="outline" className="border-purple-400 text-purple-700">
-                    {course.type}
+                    {course.host_department}
+                  </Badge>
+                  <Badge variant="outline" className="border-purple-400 text-purple-700">
+                    <a
+                    href={`https://course.ntu.edu.tw/courses/${course.semester}/${course.serial}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    >
+                    course link
+                    </a>
                   </Badge>
                   <span className="text-xs text-gray-500">
                     {course.enrolled}/{course.capacity} 人

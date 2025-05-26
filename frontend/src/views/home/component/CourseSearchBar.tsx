@@ -1,12 +1,16 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import departmens from "@/data/departments.json";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
 import React from "react";
+import Select from "react-select";
 
 interface CourseSearchBarProps {
   searchQuery: string;
   setSearchQuery: (v: string) => void;
+  departments: string[];
+  setDepartments: (v: string[]) => void;
   handleSearch: () => void;
   isLoading: boolean;
 }
@@ -14,6 +18,8 @@ interface CourseSearchBarProps {
 const CourseSearchBar: React.FC<CourseSearchBarProps> = ({
   searchQuery,
   setSearchQuery,
+  departments,
+  setDepartments,
   handleSearch,
   isLoading,
 }) => (
@@ -27,7 +33,7 @@ const CourseSearchBar: React.FC<CourseSearchBarProps> = ({
         告訴我們你想學什麼，例如：「我想修資安相關的課」
       </CardDescription>
     </CardHeader>
-    <CardContent>
+    <CardContent style={{ position: "relative", zIndex: 10 }}>
       <div className="flex gap-4">
         <Input
           placeholder="例如：我想修資安相關的課"
@@ -43,6 +49,26 @@ const CourseSearchBar: React.FC<CourseSearchBarProps> = ({
         >
           {isLoading ? "搜索中..." : "搜索課程"}
         </Button>
+      </div>
+      <div className="mt-4">
+        <Select
+          options={departmens}
+          isMulti
+          placeholder="篩選科系"
+          classNamePrefix="select"
+          onChange={(selectedOptions) => {
+            setDepartments(selectedOptions.map((option) => option.value));
+            console.log(departments);
+          }}
+          styles={{
+            menu: (base) => ({
+              ...base,
+              zIndex: 9999, // Ensure the dropdown is above other elements
+              position: "absolute",
+            }),
+          }}
+          menuPortalTarget={document.body} // Ensures dropdown is rendered in the body
+        />
       </div>
     </CardContent>
   </Card>

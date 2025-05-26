@@ -7,19 +7,20 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface SelectedCoursesSummaryProps {
   selectedCourses: Course[];
   totalCredits: number;
-  securityCourses: number;
   isLoading: boolean;
   toggleCourseSelection: (course: Course) => void;
   generateSchedule: () => void;
@@ -28,7 +29,6 @@ interface SelectedCoursesSummaryProps {
 const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
   selectedCourses,
   totalCredits,
-  securityCourses,
   isLoading,
   toggleCourseSelection,
   generateSchedule,
@@ -46,10 +46,6 @@ const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
             <Badge className="bg-green-100 text-green-800">{totalCredits} 學分</Badge>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-gray-700">資安課程：</span>
-            <Badge className="bg-purple-100 text-purple-800">{securityCourses} 門</Badge>
-          </div>
-          <div className="flex items-center gap-2">
             <span className="text-gray-700">已選課程：</span>
             <Badge className="bg-blue-100 text-blue-800">{selectedCourses.length} 門</Badge>
           </div>
@@ -57,7 +53,7 @@ const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
         <div className="space-y-2">
           {selectedCourses.map((course) => (
             <div
-              key={course.id}
+              key={course.serial}
               className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
             >
               <div>

@@ -7,13 +7,15 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
-  type: string;
+  host_department: string;
   capacity: number;
-  enrolled: number;
-  description: string;
+  enrolled?: number;
+  description?: string;
 }
 
 interface ScheduleSlot {

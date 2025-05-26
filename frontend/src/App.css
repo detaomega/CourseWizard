@@ -37,6 +37,13 @@
   padding: 2em;
 }
 
+.card-content {
+  position: relative;
+  z-index: 10;
+  overflow: visible; /* Ensures the dropdown is not clipped */
+}
+
+
 .read-the-docs {
   color: #888;
 }

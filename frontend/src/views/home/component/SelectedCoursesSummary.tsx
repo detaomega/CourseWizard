@@ -53,7 +53,7 @@ const SelectedCoursesSummary: React.FC<SelectedCoursesSummaryProps> = ({
         <div className="space-y-2">
           {selectedCourses.map((course) => (
             <div
-              key={course.id}
+              key={course.serial}
               className="flex justify-between items-center p-3 bg-gray-50 rounded-lg"
             >
               <div>

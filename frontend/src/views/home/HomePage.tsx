@@ -82,9 +82,9 @@ const HomePage: React.FC = () => {
 
   const toggleCourseSelection = (course: Course) => {
     setSelectedCourses((prev) => {
-      const isSelected = prev.find((c) => c.id === course.id);
+      const isSelected = prev.find((c) => c.serial === course.serial);
       if (isSelected) {
-        return prev.filter((c) => c.id !== course.id);
+        return prev.filter((c) => c.serial !== course.serial);
       } else {
         return [...prev, course];
       }
@@ -129,7 +129,7 @@ const HomePage: React.FC = () => {
           });
         }
       });
-
+      
       setGeneratedSchedule(schedule);
       setIsLoading(false);
     }, 1500);

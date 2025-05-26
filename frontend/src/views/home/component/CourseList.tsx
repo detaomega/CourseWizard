@@ -41,10 +41,10 @@ const CourseList: React.FC<CourseListProps> = ({
         {courses.map((course) => {
           // console.log("Rendering course:", course.id);
           // console.log(course);
-          const isSelected = selectedCourses.find((c) => c.id === course.id);
+          const isSelected = selectedCourses.find((c) => c.serial === course.serial);
           return (
             <div
-              key={course.id + course.instructor + course.time}
+              key={course.serial}
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${
                 isSelected
                   ? "border-blue-500 bg-blue-50 shadow-md"

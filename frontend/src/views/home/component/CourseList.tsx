@@ -7,6 +7,8 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
@@ -37,6 +39,8 @@ const CourseList: React.FC<CourseListProps> = ({
     <CardContent>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {courses.map((course) => {
+          // console.log("Rendering course:", course.id);
+          // console.log(course);
           const isSelected = selectedCourses.find((c) => c.id === course.id);
           return (
             <div
@@ -70,6 +74,16 @@ const CourseList: React.FC<CourseListProps> = ({
                 <div className="flex justify-between items-center">
                   <Badge variant="outline" className="border-purple-400 text-purple-700">
                     {course.host_department}
+                  </Badge>
+                  <Badge variant="outline" className="border-purple-400 text-purple-700">
+                    <a
+                    href={`https://course.ntu.edu.tw/courses/${course.semester}/${course.serial}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    >
+                    course link
+                    </a>
                   </Badge>
                   <span className="text-xs text-gray-500">
                     {course.enrolled}/{course.capacity} 人

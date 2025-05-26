@@ -2,6 +2,8 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
@@ -15,6 +17,8 @@ interface ApiResponse {
   results: Array<{
     id: string;
     identifier: string;
+    serial: string;
+    semester: string;
     name: string;
     credits: number;
     teacher_name: string;
@@ -75,6 +79,8 @@ export const transformApiDataToCourses = (apiData: ApiResponse): Course[] => {
     name: item.name,
     credits: item.credits || 0,
     instructor: item.teacher_name,
+    serial: item.serial,
+    semester: item.semester,
     time: formatTimeSlots(item.time_slots),
     location: getLocation(item.time_slots),
     host_department: item.host_department,

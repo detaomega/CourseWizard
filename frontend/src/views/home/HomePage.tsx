@@ -9,6 +9,8 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
@@ -59,6 +61,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5043",
       name: "網絡安全基礎",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "王建民",
       time: "週一 3-4",
       location: "資訊系館 104",
@@ -71,6 +75,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5044",
       name: "密碼學",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "李宏毅",
       time: "週一 3-4",
       location: "資訊系館 201",
@@ -83,6 +89,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5045",
       name: "系統安全",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "張智星",
       time: "週三 8-9",
       location: "資訊系館 301",
@@ -95,6 +103,8 @@ const HomePage: React.FC = () => {
       id: "MGMT5001",
       name: "資安法規與管理",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "陳良弼",
       time: "週四 2-3",
       location: "管理學院 205",
@@ -107,6 +117,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5046",
       name: "惡意軟體分析",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "林軒田",
       time: "週五 3-4",
       location: "資訊系館 401",
@@ -119,6 +131,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5047",
       name: "滲透測試",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "黃鐘揚",
       time: "週一 8-9",
       location: "資訊系館 501",
@@ -131,6 +145,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5048",
       name: "數位鑑識",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "呂學一",
       time: "週二 A-B",
       location: "資訊系館 601",
@@ -143,6 +159,8 @@ const HomePage: React.FC = () => {
       id: "CSIE5049",
       name: "區塊鏈安全",
       credits: 3,
+      serial: "CSIE5043",
+      semester: "113-1",
       instructor: "廖世偉",
       time: "週三 6-7",
       location: "資訊系館 102",

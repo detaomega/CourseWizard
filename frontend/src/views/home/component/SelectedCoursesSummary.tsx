@@ -7,6 +7,8 @@ interface Course {
   id: string;
   name: string;
   credits: number;
+  serial: string;
+  semester: string;
   instructor: string;
   time: string;
   location: string;
